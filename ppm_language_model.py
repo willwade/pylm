@@ -86,16 +86,31 @@ class PPMLanguageModel:
             context.order = 0
 
     def add_symbol_and_update(self, context, symbol):
-            # Ensure the symbol index is within the range of defined symbols in the vocabulary
-            if symbol < 0 or symbol >= len(self.vocab.symbols):
-                return  # Skip this symbol if it's out of bounds
+        if symbol < 0 or symbol >= len(self.vocab.symbols):
+            return  # Skip invalid symbols
     
-            symbol_node = self.add_symbol_to_node(context.head, symbol)
-            context.head = symbol_node
+        current_node = context.head
+        while context.order < self.max_order:
+            child_node = current_node.find_child_with_symbol(symbol)
+            if child_node:
+                child_node.count += 1  # Update existing node
+            else:
+                # Create new node for unseen symbol in current context
+                new_node = Node()
+                new_node.symbol = symbol
+                new_node.next = current_node.child
+                current_node.child = new_node
+                self.num_nodes += 1
+    
+            # Update context to new or found node
+            current_node = child_node or new_node
+            context.head = current_node
             context.order += 1
-            while context.order > self.max_order:
-                context.head = context.head.backoff
-                context.order -= 1
+    
+        # Calculate probabilities with potential backoff
+        probs = self.get_probs(context)
+        return probs
+
     
     def get_probs(self, context):
         num_symbols = self.vocab.size()
