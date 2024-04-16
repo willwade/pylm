@@ -43,22 +43,29 @@ class PPMLanguageModel:
             self.use_exclusion = False
 
     def add_symbol_to_node(self, node, symbol):
+        if not node:
+            return None  # Safeguard against None
+    
         symbol_node = node.find_child_with_symbol(symbol)
         if symbol_node:
-            # Update the counts for the given node.
             symbol_node.count += 1
         else:
-            # Create a new child node and update the backoff structure.
             symbol_node = Node()
             symbol_node.symbol = symbol
             symbol_node.next = node.child
             node.child = symbol_node
             self.num_nodes += 1
+    
+            # Ensure backoff is properly linked
             if node == self.root:
                 symbol_node.backoff = self.root
             else:
-                assert node.backoff is not None, "Expected valid backoff node"
-                symbol_node.backoff = self.add_symbol_to_node(node.backoff, symbol)
+                # Safe call to potentially None backoff
+                if node.backoff:
+                    symbol_node.backoff = self.add_symbol_to_node(node.backoff, symbol)
+                else:
+                    symbol_node.backoff = None  # Or set a sensible default
+    
         return symbol_node
 
     def create_context(self):
@@ -89,72 +96,84 @@ class PPMLanguageModel:
         if symbol < 0 or symbol >= len(self.vocab.symbols):
             return  # Skip invalid symbols
     
+        # Navigate to the correct position in the trie to add/update the node
         current_node = context.head
-        while context.order < self.max_order:
+        found = False
+        while context.order < self.max_order and not found:
             child_node = current_node.find_child_with_symbol(symbol)
             if child_node:
                 child_node.count += 1  # Update existing node
+                current_node = child_node
+                found = True
             else:
-                # Create new node for unseen symbol in current context
+                # Extend the current context if not found
                 new_node = Node()
                 new_node.symbol = symbol
                 new_node.next = current_node.child
                 current_node.child = new_node
                 self.num_nodes += 1
+                current_node = new_node
+                if current_node == self.root:
+                    new_node.backoff = self.root
+                else:
+                    new_node.backoff = self.add_symbol_to_node(current_node.backoff, symbol)
     
-            # Update context to new or found node
-            current_node = child_node or new_node
             context.head = current_node
             context.order += 1
     
-        # Calculate probabilities with potential backoff
-        probs = self.get_probs(context)
-        return probs
-
+        # Recalculate probabilities based on the updated context
+        print(f"Updated context order: {context.order}, head symbol: {context.head.symbol}")
+        return self.get_probs(context)
     
     def get_probs(self, context):
         num_symbols = self.vocab.size()
         probs = [0.0] * num_symbols
         exclusion_mask = [False] * num_symbols if self.use_exclusion else None
-
+    
         total_mass = 1.0
         node = context.head
         gamma = total_mass
-
+    
         while node:
             count = node.total_children_counts(exclusion_mask)
+            local_mass = 0  # Mass distributed at this level
             if count > 0:
                 child_node = node.child
                 while child_node:
                     symbol = child_node.symbol
                     if exclusion_mask is None or not exclusion_mask[symbol]:
-                        p = gamma * max(child_node.count - self.knBeta, 0) / (count + self.knAlpha)
+                        adjusted_count = max(child_node.count - self.knBeta, 0)
+                        p = (gamma * adjusted_count) / (count + self.knAlpha)
                         probs[symbol] += p
-                        total_mass -= p
+                        local_mass += p
                         if exclusion_mask:
                             exclusion_mask[symbol] = True
                     child_node = child_node.next
-
-            # Backoff to lower-order context
-            node = node.backoff
-            gamma = total_mass  # update gamma to the remaining total mass
-
-        # Distribute remaining probability mass to unseen symbols
-        num_unseen_symbols = sum(1 for seen in exclusion_mask if not seen) if exclusion_mask else num_symbols - 1
-        remaining_mass = total_mass
-
-        for i in range(1, num_symbols):  # starting from 1 to skip root symbol
-            if exclusion_mask is None or not exclusion_mask[i]:
-                p = remaining_mass / num_unseen_symbols
-                probs[i] += p
-                remaining_mass -= p
-
-        #assert abs(sum(probs) - 1) < 1e-10, "Probabilities should sum to 1"
-        print(f"Vocabulary symbols: {self.vocab.symbols}")  # Corrected reference
-        print(f"Number of probabilities: {len(probs)}")
-        assert len(probs) == self.vocab.size(), "Mismatch in expected probabilities length"
-        return probs
     
+            # Reduce total mass by the mass allocated at this level and calculate new gamma for the next level
+            total_mass -= local_mass
+            node = node.backoff
+            if node:
+                # Adjust gamma for the next level
+                gamma = total_mass * (count / (count + self.knAlpha))  # Adjust based on remaining mass and count
+    
+        # Ensure all probabilities sum to 1
+        # Distribute remaining mass to all unseen symbols, adjusting for the mass already assigned
+        if exclusion_mask is None:
+            unseen_symbols = list(range(1, num_symbols))  # Skip the root symbol
+        else:
+            unseen_symbols = [i for i in range(1, num_symbols) if not exclusion_mask[i]]
+    
+        for i in unseen_symbols:
+            p = total_mass / len(unseen_symbols)
+            probs[i] += p
+    
+        print("Total Prob Sum:", sum(probs))  # Debug output
+        print("Individual Probs:", probs)    # Debug output
+    
+        assert abs(sum(probs) - 1) < 1e-10, "Probabilities should sum to 1"
+        return probs
+
     def print_to_console(self, node=None, indent=""):
         if node is None:
             node = self.root
@@ -162,6 +181,6 @@ class PPMLanguageModel:
         if node.child is not None:
             child = node.child
             while child:
-                print(f"{indent}{child.symbol} (count: {child.count})")
+                print(f"{indent}{child.symbol} (count: {child.count}, backoff: {child.backoff is not None})")
                 self.print_to_console(child, indent + "  ")
                 child = child.next
