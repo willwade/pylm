@@ -22,13 +22,14 @@ class Node:
         return None
 
     def total_children_counts(self, exclusion_mask=None):
-        child_node = self.child
         count = 0
-        while child_node is not None:
-            if exclusion_mask is None or not exclusion_mask[child_node.symbol]:
-                count += child_node.count
-            child_node = child_node.next
+        node = self.child
+        while node:
+            if exclusion_mask is None or (node.symbol < len(exclusion_mask) and not exclusion_mask[node.symbol]):
+                count += node.count
+            node = node.next
         return count
+
 
 class PPMLanguageModel:
 
@@ -96,15 +97,15 @@ class PPMLanguageModel:
         if symbol < 0 or symbol >= len(self.vocab.symbols):
             return  # Skip invalid symbols
     
-        # Navigate to the correct position in the trie to add/update the node
         current_node = context.head
-        found = False
-        while context.order < self.max_order and not found:
+        path_found = False
+    
+        while context.order < self.max_order and not path_found:
             child_node = current_node.find_child_with_symbol(symbol)
             if child_node:
                 child_node.count += 1  # Update existing node
                 current_node = child_node
-                found = True
+                path_found = True
             else:
                 # Extend the current context if not found
                 new_node = Node()
@@ -112,19 +113,15 @@ class PPMLanguageModel:
                 new_node.next = current_node.child
                 current_node.child = new_node
                 self.num_nodes += 1
+                new_node.backoff = (current_node.backoff.find_child_with_symbol(symbol)
+                                    if current_node.backoff else self.root)
                 current_node = new_node
-                if current_node == self.root:
-                    new_node.backoff = self.root
-                else:
-                    new_node.backoff = self.add_symbol_to_node(current_node.backoff, symbol)
     
             context.head = current_node
             context.order += 1
     
-        # Recalculate probabilities based on the updated context
-        print(f"Updated context order: {context.order}, head symbol: {context.head.symbol}")
         return self.get_probs(context)
-    
+
     def get_probs(self, context):
         num_symbols = self.vocab.size()
         probs = [0.0] * num_symbols
@@ -136,43 +133,44 @@ class PPMLanguageModel:
     
         while node:
             count = node.total_children_counts(exclusion_mask)
-            local_mass = 0  # Mass distributed at this level
             if count > 0:
                 child_node = node.child
                 while child_node:
                     symbol = child_node.symbol
                     if exclusion_mask is None or not exclusion_mask[symbol]:
                         adjusted_count = max(child_node.count - self.knBeta, 0)
-                        p = (gamma * adjusted_count) / (count + self.knAlpha)
+                        p = gamma * adjusted_count / (count + self.knAlpha)
                         probs[symbol] += p
-                        local_mass += p
+                        total_mass -= p
                         if exclusion_mask:
                             exclusion_mask[symbol] = True
                     child_node = child_node.next
     
-            # Reduce total mass by the mass allocated at this level and calculate new gamma for the next level
-            total_mass -= local_mass
             node = node.backoff
-            if node:
-                # Adjust gamma for the next level
-                gamma = total_mass * (count / (count + self.knAlpha))  # Adjust based on remaining mass and count
+            gamma = total_mass
     
-        # Ensure all probabilities sum to 1
-        # Distribute remaining mass to all unseen symbols, adjusting for the mass already assigned
-        if exclusion_mask is None:
-            unseen_symbols = list(range(1, num_symbols))  # Skip the root symbol
+        # Distribute remaining probability mass to unseen symbols
+        unseen_symbols = [i for i in range(1, num_symbols) if exclusion_mask is None or not exclusion_mask[i]]
+        if unseen_symbols:
+            for i in unseen_symbols:
+                p = total_mass / len(unseen_symbols)
+                probs[i] += p
+                total_mass -= p
+        
+        # Verify that total_mass is non-zero before distribution to avoid division by zero errors
+        # Also, handle the case where there are no unseen symbols to distribute the remaining mass
+        if total_mass > 0:
+            print("Final total probability mass after distribution:", total_mass)  # Debug output
+            print("Individual Probabilities:", probs)  # Debug output
         else:
-            unseen_symbols = [i for i in range(1, num_symbols) if not exclusion_mask[i]]
-    
-        for i in unseen_symbols:
-            p = total_mass / len(unseen_symbols)
-            probs[i] += p
-    
-        print("Total Prob Sum:", sum(probs))  # Debug output
-        print("Individual Probs:", probs)    # Debug output
+            print("No remaining probability mass to distribute.")        
+        
+        print("Final total probability mass after distribution:", total_mass)  # Debug output
+        print("Individual Probabilities:", probs)  # Debug output
     
         assert abs(sum(probs) - 1) < 1e-10, "Probabilities should sum to 1"
         return probs
+
 
     def print_to_console(self, node=None, indent=""):
         if node is None:
@@ -181,6 +179,7 @@ class PPMLanguageModel:
         if node.child is not None:
             child = node.child
             while child:
-                print(f"{indent}{child.symbol} (count: {child.count}, backoff: {child.backoff is not None})")
+                backoff_id = child.backoff.symbol if child.backoff else "None"
+                print(f"{indent}{child.symbol} (count: {child.count}, backoff: {backoff_id})")
                 self.print_to_console(child, indent + "  ")
                 child = child.next
