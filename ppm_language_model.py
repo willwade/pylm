@@ -173,7 +173,7 @@ class PPMLanguageModel:
         @param {number} symbol Symbol.
         @return {?Node} Node with the symbol.
         """    
-        print(f"Adding symbol: {symbol} to node with symbol: {node.symbol}")
+        #print(f"Adding symbol: {symbol} to node with symbol: {node.symbol}")
         symbol_node = node.find_child_with_symbol(symbol)
         if not symbol_node:
             symbol_node = Node()
@@ -183,9 +183,10 @@ class PPMLanguageModel:
             self.num_nodes += 1
             # Set the backoff link of the new node
             symbol_node.backoff = self.find_appropriate_backoff(node, symbol)
-            print(f"New node created for symbol: {symbol}")
+            #print(f"New node created for symbol: {symbol}")
         else:
-            print(f"Node already exists for symbol: {symbol}, just updating count")
+            pass
+            #print(f"Node already exists for symbol: {symbol}, just updating count")
 
         symbol_node.count += 1
         return symbol_node
@@ -225,7 +226,7 @@ class PPMLanguageModel:
         @param {?Context} context Context object.
         @param {number} symbol Integer symbol.
         """    
-        print(f"Adding symbol {symbol} to context with initial head {context.head.symbol} and order {context.order}")    
+        #print(f"Adding symbol {symbol} to context with initial head {context.head.symbol} and order {context.order}")    
     
         current = context.head
         path_found = False
@@ -243,7 +244,7 @@ class PPMLanguageModel:
         if not path_found:
             context.head = self.root
             context.order = 0
-        print(f"Context updated: head={context.head.symbol if context.head else 'None'}, order={context.order}")
+        #print(f"Context updated: head={context.head.symbol if context.head else 'None'}, order={context.order}")
         self.print_context(context)  
         
         
@@ -253,31 +254,32 @@ class PPMLanguageModel:
         @param {?Context} context Context object.
         @param {number} symbol Integer symbol.
         """    
-        print(f"Updating context and trie with symbol {symbol}")
+        #print(f"Updating context and trie with symbol {symbol}")
         
-        if symbol < 0 or symbol > self.vocab.root_symbol:  # Only add valid symbols
+        # Handle invalid symbols
+        if symbol < 0 or symbol >= self.vocab.size():
             return
-        if symbol >= self.vocab.size():
-            raise ValueError("Invalid symbol: {}".format(symbol))
         
+        # Add or retrieve the node for this symbol
         symbol_node = self.add_symbol_to_node(context.head, symbol)
-        assert symbol_node == context.head.find_child_with_symbol(symbol), "Node mismatch in trie"
+        assert symbol_node, "Failed to add or find a node for the symbol"
         
+        # Update context to point to this node
         context.head = symbol_node
         context.order += 1
+        #print(f"Context now at head {context.head.symbol} with order {context.order}")
         
+        # Reduce context order if it exceeds max_order
         while context.order > self.max_order:
             context.head = context.head.backoff
             context.order -= 1
-        print(f"Context now at head {context.head.symbol} with order {context.order}")
-        self.print_context(context) 
-
+            #print(f"Reducing context order, now {context.order}")
     
     def get_probs(self, context):
         """
         Returns probabilities for all the symbols in the vocabulary given the context.
         """
-        print("Computing probabilities for context:")
+        #print("Computing probabilities for context:")
     
         num_symbols = self.vocab.size()
         probs = [0.0] * num_symbols
@@ -294,7 +296,7 @@ class PPMLanguageModel:
                 while child_node:
                     symbol = child_node.symbol
                     if not exclusion_mask or not exclusion_mask[symbol]:
-                        p = gamma * max(child_node.count - self.kn_beta, 0) / (count + self.kn_alpha)
+                        p = gamma * max(child_node.count - self.knBeta, 0) / (count + self.knAlpha)
                         probs[symbol] += p
                         total_mass -= p
                         if exclusion_mask:
@@ -339,20 +341,24 @@ class PPMLanguageModel:
     
 
     def print_trie(self, node=None, indent=""):
-        """Recursively print the trie structure from the given node."""
+        """Recursively print the trie structure from the given node with detailed formatting."""
         if node is None:
             node = self.root
-            print("Root Node:")
-        
-        if node.child:
-            child = node.child
-            while child:
-                backoff_symbol = child.backoff.symbol if child.backoff else 'None'
-                print(f"{indent}{child.symbol} (count: {child.count}, backoff: {backoff_symbol})")
-                self.print_trie(child, indent + "  ")
-                child = child.next
+            print(f"{indent}<R>({node.symbol}) [{node.count}]")  # Assuming root has a default symbol ID and count
+            indent += "  "
         else:
-            print(f"{indent}Leaf node: {node.symbol} (count: {node.count})")
+            # Translate symbol ID to character for output, assuming a method to do so exists
+            symbol_char = self.vocab.id_to_char(node.symbol) if node.symbol >= 0 else "<OOV>"
+            print(f"{indent}{symbol_char}({node.symbol}) [{node.count}]")
+    
+        child = node.child
+        while child:
+            self.print_trie(child, indent + "  ")
+            child = child.next
+    
+        if node.child is None:  # This node is a leaf
+            print(f"{indent}Leaf node: {symbol_char}({node.symbol}) [{node.count}]")
+
 
     def print_context(self, context):
         node = context.head
@@ -363,17 +369,5 @@ class PPMLanguageModel:
         path.reverse()
         print("Current context path:", ' -> '.join([f"{sym}({cnt})" for sym, cnt in path]))
 
-    def print_to_console(self, node=None, indent=""):
-        """
-        Prints the trie to console.
-        """    
-        if node is None:
-            node = self.root
-            print("Root:")
-        if node.child is not None:
-            child = node.child
-            while child:
-                backoff_id = child.backoff.symbol if child.backoff else "None"
-                print(f"{indent}{child.symbol} (count: {child.count}, backoff: {backoff_id})")
-                self.print_to_console(child, indent + "  ")
-                child = child.next
+    def print_to_console(self):
+        self.print_trie(self.root)

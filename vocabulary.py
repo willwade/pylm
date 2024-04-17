@@ -19,5 +19,15 @@ class Vocabulary:
     def get_symbol_id_or_oov(self, symbol):
         return self.symbol_to_index.get(symbol, self.oov_index)
 
+    def get_symbol_by_id(self, index):
+        if 0 <= index < len(self.symbols):
+            return self.symbols[index]
+        return None  # or your method for handling out-of-vocabulary symbols
+    
     def size(self):
         return len(self.symbols)
+
+    def id_to_char(self, id):
+        if 0 <= id < len(self.symbols):
+            return self.symbols[id]
+        return "<OOV>"
