@@ -1,6 +1,6 @@
 # Adaptive Language Models in Python
 
-> :warning: **A python re-interepretation of the PPM JS Library. NOT YET WORKING** found at https://github.com/google-research/google-research/tree/master/jslm
+> :warning: **A python re-interepretation of the PPM JS Library. ** found at https://github.com/google-research/google-research/tree/master/jslm
 
 
 This directory contains collection of simple adaptive language models that are
