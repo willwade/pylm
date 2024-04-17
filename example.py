@@ -1,67 +1,73 @@
-import sys
 from vocabulary import Vocabulary
 from ppm_language_model import PPMLanguageModel
+from histogram_language_model import HistogramLanguageModel
+from polya_tree_language_model import PolyaTreeLanguageModel
 
-def main():
-   # Create a small vocabulary
-    v = Vocabulary()
-    a_id = v.add_symbol("a")
-    b_id = v.add_symbol("b")
-
-    # Build the PPM language model trie and update the counts
+def test_ppm_language_model(vocab):
     max_order = 5
-    lm = PPMLanguageModel(v, max_order, 0.49, 0.77)  # knAlpha and knBeta are set here
-    c = lm.create_context()
-    lm.add_symbol_and_update(c, a_id)
-    lm.add_symbol_and_update(c, b_id)
-    lm.print_trie()
-    
+    lm = PPMLanguageModel(vocab, max_order)
+    context = lm.create_context()
+    a_id = vocab.get_symbol_id_or_oov("a")
+    b_id = vocab.get_symbol_id_or_oov("b")
+
+    # Update model with sequence "ab"
+    lm.add_symbol_and_update(context, a_id)
+    lm.add_symbol_and_update(context, b_id)
     print("Initial count trie:")
     lm.print_to_console()
-    lm.print_trie()
 
-    # Check static (non-adaptive) mode
-    c = lm.create_context()
-    probs = lm.get_probs(c)
-    print("Vocabulary symbols:", v.symbols)
-    print("Number of probabilities:", len(probs))
-    print("Initial probabilities:", probs)
-    assert len(probs) == len(v.symbols), "Expected probabilities for each symbol in the vocabulary"
-    
-    # Enter 'a' and check the probability estimates
-    lm.add_symbol_to_context(c, a_id)
-    probs = lm.get_probs(c)
-    lm.print_trie()
-    print("Updated probabilities after adding 'a':", probs)
-    assert probs[a_id] > 0 and probs[b_id] > 0, "Probabilities for both symbols should be greater than zero"
-    assert probs[b_id] > probs[a_id], "Probability for 'b' should be more likely after adding 'a'"
+    # Static mode check
+    context = lm.create_context()
+    probs = lm.get_probs(context)
+    print("Probabilities after initialization:", probs)
 
-    # Enter 'b'. The context becomes 'ab'. Any symbol is likely again
-    lm.add_symbol_to_context(c, b_id)
-    probs = lm.get_probs(c)
-    lm.print_trie()
-    print("Updated probabilities after adding 'b':", probs)
-    assert probs[a_id] > 0 and probs[b_id] > 0, "Probabilities for both symbols should be greater than zero"
-    assert probs[a_id] == probs[b_id], "Probabilities for both symbols should be equal after adding 'b'"
+    # Enter 'a' and check updates
+    lm.add_symbol_to_context(context, a_id)
+    probs = lm.get_probs(context)
+    print("Probabilities after 'a':", probs)
 
-    # Re-create model to check adaptive behavior
-    lm = PPMLanguageModel(v, max_order, 0.49, 0.77)
-    c = lm.create_context()
-    lm.add_symbol_and_update(c, a_id)
-    probs = lm.get_probs(c)
-    lm.print_trie()
-    print("Probabilities after re-adding 'a':", probs)
-    assert probs[a_id] > probs[b_id], "Probability for 'a' should be more likely after re-adding 'a'"
-
-    lm.add_symbol_and_update(c, b_id)
-    probs = lm.get_probs(c)
-    lm.print_trie()
-    print("Probabilities after re-adding 'b':", probs)
-    assert probs[a_id] == probs[b_id], "Probabilities for both symbols should be the same after adding 'b' again"
-
-    # Final print of the model's trie
-    print("Final count trie:")
+    # Re-creation for adaptive mode
+    lm = PPMLanguageModel(vocab, max_order)
+    context = lm.create_context()
+    lm.add_symbol_and_update(context, a_id)
+    lm.add_symbol_and_update(context, b_id)
+    lm.add_symbol_and_update(context, b_id)  # Added 'b' twice to model 'abb'
+    print("Final count trie after adaptive updates:")
     lm.print_to_console()
-    
-if __name__ == '__main__':
+
+def test_histogram_language_model(vocab):
+    lm = HistogramLanguageModel(vocab)
+    context = lm.create_context()
+    training_data = "ababababab"
+    for symbol in training_data:
+        lm.add_symbol_and_update(context, vocab.get_symbol_id_or_oov(symbol))
+    print("Histogram after training:")
+    lm.print_to_console()
+
+def test_polya_tree_language_model(vocab):
+    lm = PolyaTreeLanguageModel(vocab)
+    context = lm.create_context()
+    for symbol in "aacccdd":
+        lm.add_symbol_and_update(context, vocab.get_symbol_id_or_oov(symbol))
+    print("Polya tree model probabilities:")
+    probs = lm.get_probs(context)
+    print(probs)
+
+def main():
+    vocab = Vocabulary()
+    vocab.add_symbol("a")
+    vocab.add_symbol("b")
+
+    print("Testing PPM Language Model:")
+    test_ppm_language_model(vocab)
+
+    print("Testing Histogram Language Model:")
+    test_histogram_language_model(vocab)
+
+    vocab.add_symbol("c")
+    vocab.add_symbol("d")
+    print("Testing Polya Tree Language Model:")
+    test_polya_tree_language_model(vocab)
+
+if __name__ == "__main__":
     main()

@@ -56,7 +56,9 @@ class PolyaTreeLanguageModel:
         self.vocab = vocab
         self.total_observations = 0
         self.nodes = None
-        self.root_probs = None
+        self.root_probs = [0.0] * (self.vocab.size() - 1)
+        self.beta_distr_alpha = 0.5  # Class attribute for alpha
+        self.beta_distr_beta = 0.5   # Class attribute for beta
         self.build_tree()
 
     def create_context(self) -> Optional[Context]:
@@ -89,28 +91,35 @@ class PolyaTreeLanguageModel:
         probs = [0.0] * num_symbols
         for i in range(1, num_symbols):
             path = self.get_path(i)
-            probs[i] = self.root_probs[i]
+            # Adjust the index by -1 to account for the root symbol exclusion in root_probs
+            probs[i] = self.root_probs[i - 1]  
             for path_node in path:
                 tree_node = self.nodes[path_node.id]
-                theta = (beta_distr_alpha + tree_node.num_branch_left) / \
-                        (beta_distr_alpha + beta_distr_beta + tree_node.num_branch_left + tree_node.num_branch_right)
+                theta = (self.beta_distr_alpha + tree_node.num_branch_left) / \
+                        (self.beta_distr_alpha + self.beta_distr_beta + tree_node.num_branch_left + tree_node.num_branch_right)
                 probs[i] *= theta if path_node.left_branch else (1 - theta)
         return probs
 
     def build_tree(self):
-        num_symbols = self.vocab.size() - 1
-        num_nodes = num_symbols * 2 - 1
-        self.nodes = [Node() for _ in range(num_nodes)]
-        self.root_probs = [0.0] * num_symbols
-        beta_distr_alpha = 0.5
-        beta_distr_beta = 0.5
-        theta = beta_distr_alpha / (beta_distr_alpha + beta_distr_beta)
-        for i in range(1, self.vocab.size()):
-            path = self.get_path(i)
-            p = 1.0
-            for path_node in path:
-                p *= theta if path_node.left_branch else (1.0 - theta)
-            self.root_probs[i] = p
+            num_symbols = self.vocab.size()
+            # Calculate the number of nodes in the tree
+            num_nodes = 2 * num_symbols - 1  # Includes internal nodes and leaves
+            self.nodes = [Node() for _ in range(num_nodes)]
+            
+            # Parameters for the beta distribution
+            theta = self.beta_distr_alpha / (self.beta_distr_alpha + self.beta_distr_beta)
+    
+            # Calculate probabilities for each symbol except the root
+            for i in range(1, num_symbols):  # Start from 1 to skip the root symbol
+                path = self.get_path(i)
+                p = 1.0
+                for path_node in path:
+                    if path_node.left_branch:
+                        p *= theta
+                    else:
+                        p *= (1.0 - theta)
+                # Save probability, adjusting index by -1 to account for root symbol
+                self.root_probs[i - 1] = p
 
     def get_path(self, symbol: int) -> List[PathNode]:
         num_symbols = self.vocab.size() - 1

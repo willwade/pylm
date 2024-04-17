@@ -1,3 +1,4 @@
+import math
 """
    @fileoverview Prediction by Partial Matching (PPM) language model.
   
@@ -124,7 +125,18 @@ class Node:
                 count += node.count
             node = node.next
         return count
-    
+
+    def num_distinct_symbols(self):
+        """
+        Returns the number of distinct symbols (children) for this node.
+        """
+        distinct_count = 0
+        current = self.child
+        while current:
+            distinct_count += 1
+            current = current.next
+        return distinct_count
+        
     def iterate_children(self):
         """Yield each child node starting from the first child."""
         current = self.child
@@ -148,6 +160,7 @@ class PPMLanguageModel:
         self.max_order = max_order
         self.knAlpha = kn_alpha
         self.knBeta = kn_beta
+        self.epsilon = 1e-10
         self.root = Node()
         self.root.symbol = 0  # root symbol, usually vocabularies have a special root symbol
         self.num_nodes = 1
@@ -233,6 +246,7 @@ class PPMLanguageModel:
         print(f"Context updated: head={context.head.symbol if context.head else 'None'}, order={context.order}")
         self.print_context(context)  
         
+        
     def add_symbol_and_update(self, context, symbol):
         """
         Adds symbol to the supplied context and updates the model.
@@ -240,93 +254,89 @@ class PPMLanguageModel:
         @param {number} symbol Integer symbol.
         """    
         print(f"Updating context and trie with symbol {symbol}")
-        if symbol < 0 or symbol >= len(self.vocab.symbols):
-            return  # Skip invalid symbols
-    
-        current_node = context.head
-        path_found = False
-    
-        while context.order < self.max_order and not path_found:
-            child_node = current_node.find_child_with_symbol(symbol)
-            if child_node:
-                child_node.count += 1  # Update existing node
-                current_node = child_node
-                path_found = True
-            else:
-                # Extend the current context if not found
-                new_node = Node()
-                new_node.symbol = symbol
-                new_node.next = current_node.child
-                current_node.child = new_node
-                self.num_nodes += 1
-                new_node.backoff = (current_node.backoff.find_child_with_symbol(symbol)
-                                    if current_node.backoff else self.root)
-                current_node = new_node
-    
-            context.head = current_node
-            context.order += 1
+        
+        if symbol < 0 or symbol > self.vocab.root_symbol:  # Only add valid symbols
+            return
+        if symbol >= self.vocab.size():
+            raise ValueError("Invalid symbol: {}".format(symbol))
+        
+        symbol_node = self.add_symbol_to_node(context.head, symbol)
+        assert symbol_node == context.head.find_child_with_symbol(symbol), "Node mismatch in trie"
+        
+        context.head = symbol_node
+        context.order += 1
+        
+        while context.order > self.max_order:
+            context.head = context.head.backoff
+            context.order -= 1
         print(f"Context now at head {context.head.symbol} with order {context.order}")
         self.print_context(context) 
-        return self.get_probs(context)
 
+    
     def get_probs(self, context):
         """
-        Returns probabilities for all the symbols in the vocabulary given the
-        context.
-        @param {?Context} context Context symbols.
-        @return {?array} Array of floating point probabilities corresponding to all
-                    the symbols in the vocabulary plus the 0th element
-                    representing the root of the tree that should be ignored.
-        """    
+        Returns probabilities for all the symbols in the vocabulary given the context.
+        """
         print("Computing probabilities for context:")
-        self.print_context(context)
+    
         num_symbols = self.vocab.size()
         probs = [0.0] * num_symbols
         exclusion_mask = [False] * num_symbols if self.use_exclusion else None
-    
+        
         total_mass = 1.0
         node = context.head
         gamma = total_mass
-    
-        while node:
+        
+        while node is not None:
             count = node.total_children_counts(exclusion_mask)
             if count > 0:
                 child_node = node.child
                 while child_node:
                     symbol = child_node.symbol
-                    if exclusion_mask is None or not exclusion_mask[symbol]:
-                        adjusted_count = max(child_node.count - self.knBeta, 0)
-                        p = gamma * adjusted_count / (count + self.knAlpha)
+                    if not exclusion_mask or not exclusion_mask[symbol]:
+                        p = gamma * max(child_node.count - self.kn_beta, 0) / (count + self.kn_alpha)
                         probs[symbol] += p
                         total_mass -= p
                         if exclusion_mask:
                             exclusion_mask[symbol] = True
                     child_node = child_node.next
-    
+            
+            # Update gamma for the next lower-order context
+            gamma = self.calculate_gamma(node, count, exclusion_mask)
             node = node.backoff
-            gamma = total_mass
-        print(f"Intermediate probabilities: {probs}")
-        # Distribute remaining probability mass to unseen symbols
-        unseen_symbols = [i for i in range(1, num_symbols) if exclusion_mask is None or not exclusion_mask[i]]
-        if unseen_symbols:
-            for i in unseen_symbols:
-                p = total_mass / len(unseen_symbols)
-                probs[i] += p
-                total_mass -= p
-        
-        # Verify that total_mass is non-zero before distribution to avoid division by zero errors
-        # Also, handle the case where there are no unseen symbols to distribute the remaining mass
-        if total_mass > 0:
-            print("Final total probability mass after distribution:", total_mass)  # Debug output
-            print("Individual Probabilities:", probs)  # Debug output
-        else:
-            print("No remaining probability mass to distribute.")        
-        
-        print("Final total probability mass after distribution:", total_mass)  # Debug output
-        print("Individual Probabilities:", probs)  # Debug output
-        print(f"Final probabilities: {probs}")
-        assert abs(sum(probs) - 1) < 1e-10, "Probabilities should sum to 1"
+    
+        assert total_mass >= 0, "Invalid remaining probability mass: {}".format(total_mass)
+        self.normalize_probs(probs, num_symbols, exclusion_mask, total_mass)
         return probs
+    
+    def calculate_gamma(self, node, count, exclusion_mask):
+        q = sum(not mask for mask in exclusion_mask) if exclusion_mask else node.num_distinct_symbols()
+        return (self.knBeta * q + self.knAlpha) / (count + self.knAlpha)
+    
+    def normalize_probs(self, probs, num_symbols, exclusion_mask, total_mass):
+        if exclusion_mask is not None:
+            num_unseen_symbols = sum(1 for i in range(1, num_symbols) if not exclusion_mask[i])
+        else:
+            num_unseen_symbols = num_symbols - 1  # Exclude the root symbol at index 0
+    
+        remaining_mass = total_mass
+        # Apply remaining mass proportionally to non-excluded symbols
+        for i in range(1, num_symbols):
+            if exclusion_mask is None or not exclusion_mask[i]:  # Check if symbol is not excluded
+                if num_unseen_symbols > 0:  # Avoid division by zero
+                    p = remaining_mass / num_unseen_symbols
+                    probs[i] += p
+                    remaining_mass -= p
+    
+        # Direct normalization to ensure sum of probabilities is 1.0
+        sum_probs = sum(probs)
+        if sum_probs > 0:
+            probs = [p / sum_probs for p in probs]
+    
+        # Assert that probabilities sum to 1 (with a small tolerance for floating-point arithmetic)
+        assert math.isclose(sum(probs), 1.0, abs_tol=1e-10), "Probs do not sum to 1"
+        return probs
+    
 
     def print_trie(self, node=None, indent=""):
         """Recursively print the trie structure from the given node."""
