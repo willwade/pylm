@@ -14,9 +14,11 @@ def main():
     c = lm.create_context()
     lm.add_symbol_and_update(c, a_id)
     lm.add_symbol_and_update(c, b_id)
-
+    lm.print_trie()
+    
     print("Initial count trie:")
     lm.print_to_console()
+    lm.print_trie()
 
     # Check static (non-adaptive) mode
     c = lm.create_context()
@@ -29,6 +31,7 @@ def main():
     # Enter 'a' and check the probability estimates
     lm.add_symbol_to_context(c, a_id)
     probs = lm.get_probs(c)
+    lm.print_trie()
     print("Updated probabilities after adding 'a':", probs)
     assert probs[a_id] > 0 and probs[b_id] > 0, "Probabilities for both symbols should be greater than zero"
     assert probs[b_id] > probs[a_id], "Probability for 'b' should be more likely after adding 'a'"
@@ -36,6 +39,7 @@ def main():
     # Enter 'b'. The context becomes 'ab'. Any symbol is likely again
     lm.add_symbol_to_context(c, b_id)
     probs = lm.get_probs(c)
+    lm.print_trie()
     print("Updated probabilities after adding 'b':", probs)
     assert probs[a_id] > 0 and probs[b_id] > 0, "Probabilities for both symbols should be greater than zero"
     assert probs[a_id] == probs[b_id], "Probabilities for both symbols should be equal after adding 'b'"
@@ -45,11 +49,13 @@ def main():
     c = lm.create_context()
     lm.add_symbol_and_update(c, a_id)
     probs = lm.get_probs(c)
+    lm.print_trie()
     print("Probabilities after re-adding 'a':", probs)
     assert probs[a_id] > probs[b_id], "Probability for 'a' should be more likely after re-adding 'a'"
 
     lm.add_symbol_and_update(c, b_id)
     probs = lm.get_probs(c)
+    lm.print_trie()
     print("Probabilities after re-adding 'b':", probs)
     assert probs[a_id] == probs[b_id], "Probabilities for both symbols should be the same after adding 'b' again"
 

@@ -13,6 +13,11 @@ class Node:
         self.count = 1     # Frequency count for this node
         self.symbol = None  # Symbol that this node stores
 
+    def add_child(self, symbol):
+        if symbol not in self.children:
+            self.children[symbol] = Node()
+        return self.children[symbol]
+
     def find_child_with_symbol(self, symbol):
         current = self.child
         while current is not None:
@@ -29,6 +34,13 @@ class Node:
                 count += node.count
             node = node.next
         return count
+    
+    def iterate_children(self):
+        """Yield each child node starting from the first child."""
+        current = self.child
+        while current:
+            yield current
+            current = current.next
 
 
 class PPMLanguageModel:
@@ -44,56 +56,64 @@ class PPMLanguageModel:
             self.use_exclusion = False
 
     def add_symbol_to_node(self, node, symbol):
-        if not node:
-            return None  # Safeguard against None
-    
+        print(f"Adding symbol: {symbol} to node with symbol: {node.symbol}")
         symbol_node = node.find_child_with_symbol(symbol)
-        if symbol_node:
-            symbol_node.count += 1
-        else:
+        if not symbol_node:
             symbol_node = Node()
             symbol_node.symbol = symbol
             symbol_node.next = node.child
             node.child = symbol_node
             self.num_nodes += 1
-    
-            # Ensure backoff is properly linked
-            if node == self.root:
-                symbol_node.backoff = self.root
-            else:
-                # Safe call to potentially None backoff
-                if node.backoff:
-                    symbol_node.backoff = self.add_symbol_to_node(node.backoff, symbol)
-                else:
-                    symbol_node.backoff = None  # Or set a sensible default
-    
+            # Set the backoff link of the new node
+            symbol_node.backoff = self.find_appropriate_backoff(node, symbol)
+            print(f"New node created for symbol: {symbol}")
+        else:
+            print(f"Node already exists for symbol: {symbol}, just updating count")
+
+        symbol_node.count += 1
         return symbol_node
+        
+    def find_appropriate_backoff(self, node, symbol):
+        """
+        Traverse the backoff chain from the given node to find a node that has a child with the given symbol.
+        If such a node is found, its child node for the symbol is returned as the backoff node.
+        If no such node is found in the chain, backoff to the root.
+        """
+        current = node.backoff  # Start from the parent node's backoff
+        while current is not None:  # Traverse back up the trie through the backoff links
+            child = current.find_child_with_symbol(symbol)
+            if child:
+                return child  # Found a valid backoff node
+            current = current.backoff
+        return self.root  # Default backoff to the root if no appropriate node is found
 
     def create_context(self):
         return Context(self.root, 0)
 
     def add_symbol_to_context(self, context, symbol):
-        # Check if the symbol index is within the valid range
-        if symbol < 0 or symbol >= len(self.vocab.symbols):
-            return  # Skip this symbol if it's out of bounds
-
-        while context.head is not None:
-            if context.order < self.max_order:
-                # Extend the current context
-                child_node = context.head.find_child_with_symbol(symbol)
-                if child_node:
-                    context.head = child_node
+        print(f"Adding symbol {symbol} to context with initial head {context.head.symbol} and order {context.order}")    
+    
+        current = context.head
+        path_found = False
+    
+        while not path_found and current:
+            for child in current.iterate_children():
+                if child.symbol == symbol:
+                    context.head = child
                     context.order += 1
-                    return
-            # Back off to a shorter context
-            context.order -= 1
-            context.head = context.head.backoff
-
-        if context.head is None:
+                    path_found = True
+                    break
+            if not path_found:
+                current = current.backoff
+    
+        if not path_found:
             context.head = self.root
             context.order = 0
-
+        print(f"Context updated: head={context.head.symbol if context.head else 'None'}, order={context.order}")
+        self.print_context(context)  
+        
     def add_symbol_and_update(self, context, symbol):
+        print(f"Updating context and trie with symbol {symbol}")
         if symbol < 0 or symbol >= len(self.vocab.symbols):
             return  # Skip invalid symbols
     
@@ -119,10 +139,13 @@ class PPMLanguageModel:
     
             context.head = current_node
             context.order += 1
-    
+        print(f"Context now at head {context.head.symbol} with order {context.order}")
+        self.print_context(context) 
         return self.get_probs(context)
 
     def get_probs(self, context):
+        print("Computing probabilities for context:")
+        self.print_context(context)
         num_symbols = self.vocab.size()
         probs = [0.0] * num_symbols
         exclusion_mask = [False] * num_symbols if self.use_exclusion else None
@@ -148,7 +171,7 @@ class PPMLanguageModel:
     
             node = node.backoff
             gamma = total_mass
-    
+        print(f"Intermediate probabilities: {probs}")
         # Distribute remaining probability mass to unseen symbols
         unseen_symbols = [i for i in range(1, num_symbols) if exclusion_mask is None or not exclusion_mask[i]]
         if unseen_symbols:
@@ -167,10 +190,34 @@ class PPMLanguageModel:
         
         print("Final total probability mass after distribution:", total_mass)  # Debug output
         print("Individual Probabilities:", probs)  # Debug output
-    
+        print(f"Final probabilities: {probs}")
         assert abs(sum(probs) - 1) < 1e-10, "Probabilities should sum to 1"
         return probs
 
+    def print_trie(self, node=None, indent=""):
+        """Recursively print the trie structure from the given node."""
+        if node is None:
+            node = self.root
+            print("Root Node:")
+        
+        if node.child:
+            child = node.child
+            while child:
+                backoff_symbol = child.backoff.symbol if child.backoff else 'None'
+                print(f"{indent}{child.symbol} (count: {child.count}, backoff: {backoff_symbol})")
+                self.print_trie(child, indent + "  ")
+                child = child.next
+        else:
+            print(f"{indent}Leaf node: {node.symbol} (count: {node.count})")
+
+    def print_context(self, context):
+        node = context.head
+        path = []
+        while node and node != self.root:
+            path.append((node.symbol, node.count))
+            node = node.backoff
+        path.reverse()
+        print("Current context path:", ' -> '.join([f"{sym}({cnt})" for sym, cnt in path]))
 
     def print_to_console(self, node=None, indent=""):
         if node is None:
