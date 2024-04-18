@@ -10,7 +10,7 @@ cheap enough memory- and processor-wise to train in a browser on the fly.
 
 ### Prediction by Partial Matching (PPM)
 
-Prediction by Partial Matching (PPM) character [language model](ppm_language_model.js).
+Prediction by Partial Matching (PPM) character [language model](ppm_language_model.py).
 
 #### Bibliography
 
@@ -27,7 +27,7 @@ Prediction by Partial Matching (PPM) character [language model](ppm_language_mod
 
 ### Histogram Language Model
 
-Very simple context-less histogram character [language model](histogram_language_model.js).
+Very simple context-less histogram character [language model](histogram_language_model.py).
 
 #### Bibliography
 
@@ -37,7 +37,7 @@ Very simple context-less histogram character [language model](histogram_language
 
 ### Pólya Tree (PT) Language Model
 
-Context-less predictive distribution based on balanced binary search trees. Tentative implementation is [here](polya_tree_language_model.js).
+Context-less predictive distribution based on balanced binary search trees. Tentative implementation is [here](polya_tree_language_model.py).
 
 #### Bibliography
 
@@ -49,19 +49,19 @@ Context-less predictive distribution based on balanced binary search trees. Tent
 
 ## Example
 
-Please see a simple example usage of the model API in [example.js](example.js).
+Please see a simple example usage of the model API in [example.py](example.py).
 
 The example has no command-line arguments. To run it using
-[NodeJS](https://nodejs.org/en/) invoke
+Python invoke
 
 ```shell
-> node example.js
+> python example.py
 ```
 
 ## Test Utility
 
-A simple test driver [language_model_driver.js](language_model_driver.js) can be
-used to check that the model behaves using [NodeJS](https://nodejs.org/en/). The
+A simple test driver [language_model_driver.js](language_model_driver.py) can be
+used to check that the model behaves using Python 3+. The
 driver takes three parameters: the maximum order for the language model, the
 training file and the test file in text format. Currently only the PPM model is
 supported.
@@ -69,7 +69,7 @@ supported.
 Example:
 
 ```shell
-> node --max-old-space-size=4096 language_model_driver.js 7 training.txt test.txt
+> python language_model_driver.py 7 training.txt test.txt
 Initializing vocabulary from training.txt ...
 Created vocabulary with 212 symbols.
 Constructing 7-gram LM ...
@@ -77,3 +77,5 @@ Created trie with 21502513 nodes.
 Running over test.txt ...
 Results: numSymbols = 69302, ppl = 6.047012997396163, entropy = 2.5962226799087356 bits/char, OOVs = 0 (0%).
 ```
+
+
