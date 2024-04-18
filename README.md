@@ -75,7 +75,7 @@ Training character ppm model...
 Top 5 character predictions: ['\n', 'q', 'g', 'r', '?']
 Training word ppm model...
 Top 5 word predictions: ['Tyler.', 'Nicholas.', 'Matthew.', 'Ethan.', 'Aidan.']
-```_
+```
 
 ## Test Utility
 
