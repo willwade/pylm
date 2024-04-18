@@ -10,7 +10,13 @@ cheap enough memory- and processor-wise to train in a browser on the fly.
 
 ### Prediction by Partial Matching (PPM)
 
-Prediction by Partial Matching (PPM) character [language model](ppm_language_model.py).
+Prediction by Partial Matching (PPM) character [language model](ppm_language_model.py). See the bibliography below. If you are looking for alternative implentations 
+
+* **Javascript**:  https://github.com/google-research/google-research/tree/master/jslm
+* **C++** https://github.com/pmcharrison/ppm, https://github.com/money6g/ppm
+* **Swift** - https://github.com/kdv123/PPMLM
+* **Python** (NB: For compression rather than prediction) https://pyppmd.readthedocs.io/en/latest/index.html https://pypi.org/project/pyppmd/
+
 
 #### Bibliography
 
