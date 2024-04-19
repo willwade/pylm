@@ -10,13 +10,14 @@ def train_model(train_file, max_order):
         contents = file.read()
 
     vocab = Vocabulary()
-    for char in contents:
+    for char in set(contents):  # Adding only unique characters to vocabulary
         vocab.add_symbol(char)
 
     lm = PPMLanguageModel(vocab, max_order)
     context = Context(lm.root, 0)
-    for symbol in contents:
-        lm.add_symbol_and_update(context, vocab.symbols.index(symbol))
+    for char in contents:
+        symbol_id = vocab.get_symbol_id_or_oov(char)
+        lm.add_symbol_and_update(context, symbol_id)
 
     return lm, vocab
 
@@ -30,16 +31,16 @@ def test_model(lm, vocab, test_file):
         if line.strip():
             context = Context(lm.root, 0)
             for char in line.strip():
-                symbol = vocab.symbols.index(char) if char in vocab.symbols else -1  # OOV handling
+                symbol = vocab.get_symbol_id_or_oov(char)
                 probs = lm.get_probs(context)
-                prob = probs[symbol]
-                assert prob > 0, "Invalid symbol probability"
-                total_log_prob += math.log10(prob)
-                num_symbols += 1
+                prob = probs[symbol] if symbol < len(probs) else 0  # Handling OOV and checking bounds
+                if prob > 0:
+                    total_log_prob += math.log10(prob)
+                    num_symbols += 1
                 lm.add_symbol_to_context(context, symbol)
 
-    entropy = -(total_log_prob / num_symbols) / math.log10(2)  # converting log base 10 to base 2
-    perplexity = 10 ** (-total_log_prob / num_symbols)
+    entropy = -(total_log_prob / num_symbols) / math.log10(2) if num_symbols > 0 else 0
+    perplexity = 10 ** (-total_log_prob / num_symbols) if num_symbols > 0 else float('inf')
     print(f"Results: numSymbols = {num_symbols}, ppl = {perplexity}, entropy = {entropy} bits/char")
 
 if __name__ == '__main__':

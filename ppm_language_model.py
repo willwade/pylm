@@ -205,7 +205,8 @@ class PPMLanguageModel:
         else:
             context.head = self.root
             context.order = 0
-        self.print_context(context)
+        if self.debug:
+            self.print_context(context)
         
     def add_symbol_and_update(self, context, symbol):
         """
