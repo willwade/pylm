@@ -34,7 +34,7 @@ class Context:
     """
     Handle encapsulating the search context.
     """
-    def __init__(self, head, order):
+    def __init__(self, head, order, debug=False):
         """
         Constructor.
         @param {?Node} head Head node of the context.
@@ -42,6 +42,7 @@ class Context:
         """
         self.head = head
         self.order = order
+        self.debug = debug
 
  
 class Node:
@@ -70,11 +71,9 @@ class Node:
         "AB" ("[R] -> [A] -> [*B*]") the backoff points at the child node of a
         different path "[R] -> [*B*]". 
         """
-        self.child = None  # Leftmost child node for the current node
-        self.next = None   # Next node
-        self.backoff = None  # Node in the backoff structure   
-        self.count = 1     # Frequency count for this node
-        self.symbol = None  # Symbol that this node stores
+        self.children = {}  # Use a dictionary to hold child nodes
+        self.backoff = None  # Node in the backoff structure
+        self.count = 1       # Frequency count for this node
 
     def add_child(self, symbol):
         if symbol not in self.children:
@@ -91,13 +90,8 @@ class Node:
         Returns:
             Node: Node with the specified symbol, or None if not found.
         """    
-        current = self.child
-        while current is not None:
-            if current.symbol == symbol:
-                return current
-            current = current.next
-        return None
-        
+        return self.children.get(symbol, None)
+
     def total_children_counts(self, exclusion_mask=None):
         """
         Total number of observations for all the children of this node.
@@ -118,35 +112,19 @@ class Node:
         Returns:
             int: Total number of observations under this node.
         """
-        count = 0
-        node = self.child
-        while node:
-            if exclusion_mask is None or (node.symbol < len(exclusion_mask) and not exclusion_mask[node.symbol]):
-                count += node.count
-            node = node.next
-        return count
+        total = sum(node.count for sym, node in self.children.items()
+                    if exclusion_mask is None or not exclusion_mask[sym])
+        return total
 
     def num_distinct_symbols(self):
         """
         Returns the number of distinct symbols (children) for this node.
         """
-        distinct_count = 0
-        current = self.child
-        while current:
-            distinct_count += 1
-            current = current.next
-        return distinct_count
-        
-    def iterate_children(self):
-        """Yield each child node starting from the first child."""
-        current = self.child
-        while current:
-            yield current
-            current = current.next
+        return len(self.children)
 
 
 class PPMLanguageModel:
-    def __init__(self, vocabulary, max_order, kn_alpha=0.49, kn_beta=0.77):
+    def __init__(self, vocabulary, max_order, kn_alpha=0.49, kn_beta=0.77, debug=False):
         """
         Initializes a PPM Language Model.
 
@@ -165,6 +143,7 @@ class PPMLanguageModel:
         self.root.symbol = 0  # root symbol, usually vocabularies have a special root symbol
         self.num_nodes = 1
         self.use_exclusion = False
+        self.debug = debug
 
     def add_symbol_to_node(self, node, symbol):
         """
@@ -173,23 +152,17 @@ class PPMLanguageModel:
         @param {number} symbol Symbol.
         @return {?Node} Node with the symbol.
         """    
-        #print(f"Adding symbol: {symbol} to node with symbol: {node.symbol}")
-        symbol_node = node.find_child_with_symbol(symbol)
-        if not symbol_node:
-            symbol_node = Node()
-            symbol_node.symbol = symbol
-            symbol_node.next = node.child
-            node.child = symbol_node
+        if symbol not in node.children:
+            node.children[symbol] = Node()
+            node.children[symbol].symbol = symbol
             self.num_nodes += 1
             # Set the backoff link of the new node
-            symbol_node.backoff = self.find_appropriate_backoff(node, symbol)
-            #print(f"New node created for symbol: {symbol}")
+            node.children[symbol].backoff = self.find_appropriate_backoff(node, symbol)
         else:
-            pass
-            #print(f"Node already exists for symbol: {symbol}, just updating count")
+            node.children[symbol].count += 1
+    
+        return node.children[symbol]
 
-        symbol_node.count += 1
-        return symbol_node
         
     def find_appropriate_backoff(self, node, symbol):
         """
@@ -226,27 +199,13 @@ class PPMLanguageModel:
         @param {?Context} context Context object.
         @param {number} symbol Integer symbol.
         """    
-        #print(f"Adding symbol {symbol} to context with initial head {context.head.symbol} and order {context.order}")    
-    
-        current = context.head
-        path_found = False
-    
-        while not path_found and current:
-            for child in current.iterate_children():
-                if child.symbol == symbol:
-                    context.head = child
-                    context.order += 1
-                    path_found = True
-                    break
-            if not path_found:
-                current = current.backoff
-    
-        if not path_found:
+        if symbol in context.head.children:
+            context.head = context.head.children[symbol]
+            context.order += 1
+        else:
             context.head = self.root
             context.order = 0
-        #print(f"Context updated: head={context.head.symbol if context.head else 'None'}, order={context.order}")
-        self.print_context(context)  
-        
+        self.print_context(context)
         
     def add_symbol_and_update(self, context, symbol):
         """
@@ -284,29 +243,23 @@ class PPMLanguageModel:
         num_symbols = self.vocab.size()
         probs = [0.0] * num_symbols
         exclusion_mask = [False] * num_symbols if self.use_exclusion else None
-        
         total_mass = 1.0
         node = context.head
         gamma = total_mass
-        
+    
         while node is not None:
             count = node.total_children_counts(exclusion_mask)
             if count > 0:
-                child_node = node.child
-                while child_node:
-                    symbol = child_node.symbol
+                for symbol, child_node in node.children.items():
                     if not exclusion_mask or not exclusion_mask[symbol]:
                         p = gamma * max(child_node.count - self.knBeta, 0) / (count + self.knAlpha)
                         probs[symbol] += p
                         total_mass -= p
                         if exclusion_mask:
                             exclusion_mask[symbol] = True
-                    child_node = child_node.next
-            
-            # Update gamma for the next lower-order context
             gamma = self.calculate_gamma(node, count, exclusion_mask)
             node = node.backoff
-    
+        
         assert total_mass >= 0, "Invalid remaining probability mass: {}".format(total_mass)
         self.normalize_probs(probs, num_symbols, exclusion_mask, total_mass)
         return probs
@@ -350,15 +303,12 @@ class PPMLanguageModel:
             # Translate symbol ID to character for output, assuming a method to do so exists
             symbol_char = self.vocab.id_to_char(node.symbol) if node.symbol >= 0 else "<OOV>"
             print(f"{indent}{symbol_char}({node.symbol}) [{node.count}]")
-    
-        child = node.child
-        while child:
+        
+        for symbol, child in node.children.items():
             self.print_trie(child, indent + "  ")
-            child = child.next
-    
-        if node.child is None:  # This node is a leaf
+        
+        if not node.children:  # This node is a leaf
             print(f"{indent}Leaf node: {symbol_char}({node.symbol}) [{node.count}]")
-
 
     def print_context(self, context):
         node = context.head
