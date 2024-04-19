@@ -1,3 +1,8 @@
+# This isnt the prettiest. I should of used the original base files/library 
+# and language_model_driver etc but I had to hack away at too many bits and I didnt want to mess with that code
+# In the future I guess you should work on and then build a py library properly. He Ho.. this seems to work
+# I think there is something around spaces though in strings.. 
+
 import sys
 import string
 from collections import defaultdict
