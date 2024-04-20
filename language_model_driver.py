@@ -2,6 +2,7 @@
 
 import sys
 from vocabulary import Vocabulary
+from vocabulary import VocabWords
 from ppm_language_model import PPMLanguageModel, Context
 import math
 
@@ -46,10 +47,55 @@ def test_model(lm, vocab, test_file):
 def predict_next_from_fixed_input(lm, vocab, input_text, num_predictions=3):
     context = lm.create_context()
     for char in input_text:
-        symbol = vocab.get_symbol_id_or_oov(char)
-        lm.add_symbol_to_context(context, symbol)
-    top_predictions = lm.predict_next_characters(context, num_predictions)
-    print(f"Top {num_predictions} character predictions for '{input_text}': {top_predictions}")
+        char_id = vocab.get_symbol_id_or_oov(char)
+        lm.add_symbol_to_context(context, char_id)
+    
+    top_prediction_ids = lm.predict_next_ids(context, num_predictions)
+    
+    # Convert indices to characters, handling OOV if necessary
+    predicted_chars = [vocab.get_symbol_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in top_prediction_ids]
+    
+    print(f"Top {num_predictions} character predictions for '{input_text}': {predicted_chars}")
+
+
+def tokenize(text):
+    # Simple tokenization by whitespace. You might want to use a more robust tokenizer.
+    return text.split()
+
+def train_model_word_level(train_file, max_order,debug=False):
+    with open(train_file, 'r', encoding='utf-8') as file:
+        contents = file.read()
+    
+    words = tokenize(contents)
+    vocab = VocabWords()
+    for word in set(words):
+        vocab.add_symbol(word)
+
+    lm = PPMLanguageModel(vocab, max_order, debug=debug)
+    context = Context(lm.root, 0)
+    for word in words:
+        word_id = vocab.get_symbol_id_or_oov(word)
+        lm.add_symbol_and_update(context, word_id)
+
+    return lm, vocab
+
+def predict_next_from_fixed_input_word_level(lm, vocab, input_text, num_predictions=3):
+    context = lm.create_context()
+    for word in tokenize(input_text):
+        word_id = vocab.get_symbol_id_or_oov(word)
+        lm.add_symbol_to_context(context, word_id)
+
+    top_predictions = lm.predict_next_ids(context, num_predictions)
+
+    predicted_words = []
+    for index, _ in top_predictions:
+        if index == vocab.oov_index:
+            predicted_words.append('<OOV>')
+        else:
+            predicted_word = vocab.get_symbol_by_id(index)
+            predicted_words.append(predicted_word)
+
+    print(f"Top {num_predictions} word predictions for '{input_text}': {predicted_words}")
 
 
 '''
@@ -105,6 +151,13 @@ if __name__ == '__main__':
     #lm.print_to_console()
     #g = build_graph_iterative(lm.root, vocab)
     #draw_graph(g)
+    
+    # Now words
+    lm, vocab = train_model_word_level(train_file, max_order, debug=False)  # Use the word-level training function
+    test_model(lm, vocab, test_file)
+    fixed_input = "Hello "
+    predict_next_from_fixed_input_word_level(lm, vocab, fixed_input, 5)  # Use the word-level prediction function
+    
 
 
 

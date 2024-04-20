@@ -325,7 +325,7 @@ class PPMLanguageModel:
         assert math.isclose(sum(probs), 1.0, abs_tol=1e-10), "Probs do not sum to 1"
         return probs
     
-    def predict_next_characters(self, context, num_predictions=1):
+    def predict_next_ids(self, context, num_predictions=1):
         """Predicts the next characters given the current context, returning the top num_predictions characters."""
         if self.debug: 
             print(f"Debug: Current context before prediction: {context}")
@@ -338,10 +338,11 @@ class PPMLanguageModel:
         # Get the indices of the top num_predictions probabilities
         top_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)[:num_predictions]
         
-        # Fetch the characters corresponding to these top indices
-        top_predictions = [(self.vocab.get_symbol_by_id(index), probs[index]) for index in top_indices if probs[index] > 0]
+        # Keep the indices and probabilities
+        top_predictions = [(index, probs[index]) for index in top_indices if probs[index] > 0]
         
         return top_predictions
+
 
     def print_trie(self, node=None, indent=""):
         if node is None:
