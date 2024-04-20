@@ -149,7 +149,7 @@ if __name__ == '__main__':
     test_model(lm, vocab, test_file)
     fixed_input = "he"
     predicted_chars= predict_next_from_fixed_input(lm, vocab, fixed_input, 5)
-    print(f"Top 5 character predictions for 'fixed_input': {predicted_chars}")
+    print(f"Top 5 character predictions for '{fixed_input}': {predicted_chars}")
     #lm.print_to_console()
     #g = build_graph_iterative(lm.root, vocab)
     #draw_graph(g)
@@ -158,9 +158,9 @@ if __name__ == '__main__':
     start_time = time.perf_counter()
     lm, vocab = train_model_word_level(train_file, max_order*4, debug=False)  # Use the word-level training function
     test_model(lm, vocab, test_file)
-    fixed_input = "Hello "
+    fixed_input = "What "
     predicted_words = predict_next_from_fixed_input_word_level(lm, vocab, fixed_input, 5)  # Use the word-level prediction function
-    print(f"Top 5 character predictions for 'fixed_input': {predicted_words}")
+    print(f"Top 5 character predictions for '{fixed_input}': {predicted_words}")
     
 
 

@@ -36,8 +36,10 @@ def test_ppm_language_model(vocab):
     lm.print_to_console()
 
     # Predict next character
-    predicted_char = lm.predict_next_characters(context,3)
-    print(f"Predicted next characters: {predicted_char}")
+    predicted_ids = lm.predict_next_ids(context,3)
+    print(f"Predicted next ids: {predicted_ids}")
+    predicted_chars = [vocab.get_symbol_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in predicted_ids]
+    print(f"Predicted next chars': {predicted_chars}")
     
 def test_histogram_language_model(vocab):
     lm = HistogramLanguageModel(vocab)
