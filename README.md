@@ -85,22 +85,37 @@ Top 5 word predictions: ['Tyler.', 'Nicholas.', 'Matthew.', 'Ethan.', 'Aidan.']
 
 ## Test Utility
 
-A simple test driver [language_model_driver.py](language_model_driver.py) can be
-used to check that the model behaves using Python 3+. The
-driver takes three parameters: the maximum order for the language model, the
-training file and the test file in text format. Currently only the PPM model is
-supported.
+A simple test driver [language_model_driver.py](language_model_driver.py) can be used to check that the model behaves using Python 3+. The
+driver takes three parameters: the maximum order for the language model, the training file and the test file in text format. Currently only the PPM model is
+supported. Note we show in this how you can do next letter and next word predictions **use max_length of around 30** 
+Be warned too: training is not very performant at the word level
 
 Example:
 
 ```shell
-> python language_model_driver.py 7 training.txt test.txt
-Initializing vocabulary from training.txt ...
-Created vocabulary with 212 symbols.
-Constructing 7-gram LM ...
-Created trie with 21502513 nodes.
-Running over test.txt ...
-Results: numSymbols = 69302, ppl = 6.047012997396163, entropy = 2.5962226799087356 bits/char, OOVs = 0 (0%).
+> python language_model_driver.py 30 training_small.txt training_small_test.txt
+Results: numSymbols = 54, ppl = 13.268624243648365, entropy = 3.7299468876181376 bits/char
+Top 5 character predictions for 'he': ['l', ' ', 'e', 't', 'o']
+Results: numSymbols = 54, ppl = 9.575973715690846, entropy = 3.2594191923509106 bits/char
+Top 5 word predictions for 'Hello ': ['<OOV>', 'everyone', 'sequence', 'test', 'world']
+```
+
+## Example train and test files to use
+
+train.txt
+
+```txt
+hello world hello everyone hello there hello world
+this is a test this is a trial this is a sequence
+welcome to the model test welcome to the world
+Gorgeous Doris Day is lovely. One day i went to the beach. 
+Today I was at the shops. What day is it today?
+```
+test.txt
+
+```txt
+hello world this is a test sequence
+welcome to the test
 ```
 
 
