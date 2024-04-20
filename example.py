@@ -35,6 +35,10 @@ def test_ppm_language_model(vocab):
     print("Final count trie after adaptive updates:")
     lm.print_to_console()
 
+    # Predict next character
+    predicted_char = lm.predict_next_characters(context,3)
+    print(f"Predicted next characters: {predicted_char}")
+    
 def test_histogram_language_model(vocab):
     lm = HistogramLanguageModel(vocab)
     context = lm.create_context()
