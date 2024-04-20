@@ -64,26 +64,7 @@ Python invoke
 > python example.py
 ```
 
-## Standalone Python Predictor
-
-If you want to try predicting next characters or next words see ``standalone-PPM-predictor\predictor.py``
-It trains on the dasher_training.txt and then suggests next letters or words. It caches the word and character models so bewarned if you want to retrain. Just delete the pickle files. 
-
-```shell
-python predictor.py  
-Processing token: 'hello' with ID: 2
-Processing token: 'world' with ID: 3
-Final context: 2 -> 3
-Node(symbol=None, count=1)
-    Node(symbol=2, count=2)
-        Node(symbol=3, count=2)
-Training character ppm model...
-Top 5 character predictions: ['\n', 'q', 'g', 'r', '?']
-Training word ppm model...
-Top 5 word predictions: ['Tyler.', 'Nicholas.', 'Matthew.', 'Ethan.', 'Aidan.']
-```
-
-## Test Utility
+## Test Utility (and Demo of Character or Word prediction)
 
 A simple test driver [language_model_driver.py](language_model_driver.py) can be used to check that the model behaves using Python 3+. The
 driver takes three parameters: the maximum order for the language model, the training file and the test file in text format. Currently only the PPM model is
