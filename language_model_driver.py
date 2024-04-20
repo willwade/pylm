@@ -138,6 +138,8 @@ def draw_graph(graph):
     nx.draw(graph, pos, labels=labels, with_labels=True, node_size=2000, node_color='lightblue')
     plt.show()
 
+import time
+
 if __name__ == '__main__':
     if len(sys.argv) != 4:
         print("Usage: python script.py max_order train_file test_file")
@@ -153,7 +155,8 @@ if __name__ == '__main__':
     #draw_graph(g)
     
     # Now words
-    lm, vocab = train_model_word_level(train_file, max_order, debug=False)  # Use the word-level training function
+    start_time = time.perf_counter()
+    lm, vocab = train_model_word_level(train_file, max_order*4, debug=False)  # Use the word-level training function
     test_model(lm, vocab, test_file)
     fixed_input = "Hello "
     predict_next_from_fixed_input_word_level(lm, vocab, fixed_input, 5)  # Use the word-level prediction function

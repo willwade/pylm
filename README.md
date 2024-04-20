@@ -88,7 +88,7 @@ Top 5 word predictions: ['Tyler.', 'Nicholas.', 'Matthew.', 'Ethan.', 'Aidan.']
 A simple test driver [language_model_driver.py](language_model_driver.py) can be used to check that the model behaves using Python 3+. The
 driver takes three parameters: the maximum order for the language model, the training file and the test file in text format. Currently only the PPM model is
 supported. Note we show in this how you can do next letter and next word predictions **use max_length of around 30** 
-Be warned too: training is not very performant at the word level
+Be warned too: training is fast. running test_model can take a long time for the word models. Look at the code - you will need a larger max_length for words_
 
 Example:
 
