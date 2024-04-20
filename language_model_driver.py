@@ -54,8 +54,8 @@ def predict_next_from_fixed_input(lm, vocab, input_text, num_predictions=3):
     
     # Convert indices to characters, handling OOV if necessary
     predicted_chars = [vocab.get_symbol_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in top_prediction_ids]
+    return predicted_chars
     
-    print(f"Top {num_predictions} character predictions for '{input_text}': {predicted_chars}")
 
 
 def tokenize(text):
@@ -94,9 +94,8 @@ def predict_next_from_fixed_input_word_level(lm, vocab, input_text, num_predicti
         else:
             predicted_word = vocab.get_symbol_by_id(index)
             predicted_words.append(predicted_word)
-
-    print(f"Top {num_predictions} word predictions for '{input_text}': {predicted_words}")
-
+    return predicted_words
+    
 
 '''
     So this next chunk is really code to give you a very pretty graph of the trie
@@ -149,7 +148,8 @@ if __name__ == '__main__':
     lm, vocab = train_model(train_file, max_order, debug=False)
     test_model(lm, vocab, test_file)
     fixed_input = "he"
-    predict_next_from_fixed_input(lm, vocab, fixed_input, 5)
+    predicted_chars= predict_next_from_fixed_input(lm, vocab, fixed_input, 5)
+    print(f"Top 5 character predictions for 'fixed_input': {predicted_chars}")
     #lm.print_to_console()
     #g = build_graph_iterative(lm.root, vocab)
     #draw_graph(g)
@@ -159,7 +159,8 @@ if __name__ == '__main__':
     lm, vocab = train_model_word_level(train_file, max_order*4, debug=False)  # Use the word-level training function
     test_model(lm, vocab, test_file)
     fixed_input = "Hello "
-    predict_next_from_fixed_input_word_level(lm, vocab, fixed_input, 5)  # Use the word-level prediction function
+    predicted_words = predict_next_from_fixed_input_word_level(lm, vocab, fixed_input, 5)  # Use the word-level prediction function
+    print(f"Top 5 character predictions for 'fixed_input': {predicted_words}")
     
 
 
