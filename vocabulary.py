@@ -1,57 +1,32 @@
 class Vocabulary:
     def __init__(self):
-        self.symbols = []
-        self.symbol_to_index = {}
-        self.root_symbol = 0
-        self.root_symbol_name = "<R>"  # Name of the root symbol
-        self.oov_symbol = "<OOV>"
-        self.add_symbol(self.root_symbol)  # Add root symbol on initialization
-        self.oov_index = self.add_symbol(self.oov_symbol)  # Add OOV symbol on initialization
-
-    def add_symbol(self, symbol):
-        if symbol not in self.symbol_to_index:
-            self.symbols.append(symbol)
-            index = len(self.symbols) - 1
-            self.symbol_to_index[symbol] = index
-            return index
-        return self.symbol_to_index[symbol]
-
-    def get_symbol_id_or_oov(self, symbol):
-        return self.symbol_to_index.get(symbol, self.oov_index)
-
-    def get_symbol_by_id(self, index):
-        if 0 <= index < len(self.symbols):
-            return self.symbols[index]
-        return None  # or your method for handling out-of-vocabulary symbols
-    
-    def size(self):
-        return len(self.symbols)
-
-    def id_to_char(self, id):
-        if 0 <= id < len(self.symbols):
-            return self.symbols[id]
-        return "<OOV>"
-        
-
-class VocabWords:
-    def __init__(self):
-        self.word_to_index = {'<OOV>': 0}  # Out-of-vocabulary has index 0
-        self.index_to_word = ['<OOV>']
+        self.items_to_index = {'<OOV>': 0}  # Out-of-vocabulary has index 0
+        self.index_to_items = ['<OOV>']
         self.oov_index = 0
+        self.root_index = 1  # Define a root index
 
-    def add_symbol(self, word):
-        if word not in self.word_to_index:
-            self.index_to_word.append(word)
-            self.word_to_index[word] = len(self.index_to_word) - 1
-        return self.word_to_index[word]
+    def add_item(self, item):
+        if item not in self.items_to_index:
+            self.index_to_items.append(item)
+            self.items_to_index[item] = len(self.index_to_items) - 1
+        return self.items_to_index[item]
 
-    def get_symbol_id_or_oov(self, word):
-        return self.word_to_index.get(word, self.oov_index)
+    def get_id_or_oov(self, item):
+        return self.items_to_index.get(item, self.oov_index)
 
-    def get_symbol_by_id(self, index):
-        if 0 <= index < len(self.index_to_word):
-            return self.index_to_word[index]
+    def get_item_by_id(self, index):
+        if 0 <= index < len(self.index_to_items):
+            return self.index_to_items[index]
         return '<OOV>'
 
     def size(self):
-        return len(self.index_to_word)
+        return len(self.index_to_items)
+
+    def is_valid_id(self, index):
+        return 0 <= index < self.size()
+
+    def __len__(self):
+        return self.size()
+
+    def get_root_id(self):
+        return self.root_index  # Retrieve the index for the root symbol

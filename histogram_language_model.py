@@ -25,7 +25,7 @@ class HistogramLanguageModel:
         pass
 
     def add_symbol_and_update(self, context: Optional[Context], symbol: int):
-        if symbol <= self.vocab.root_symbol:  # Only add valid symbols.
+        if symbol <= self.vocab.get_root_id():  # Only add valid symbols.
             return
         assert symbol < self.vocab.size(), f"Invalid symbol: {symbol}"
         self.histogram[symbol] += 1
@@ -68,6 +68,7 @@ class HistogramLanguageModel:
 
     def print_to_console(self):
         print("Histogram of counts (total: " + str(self.total_observations) + "): ")
-        for i in range(1, len(self.histogram)):
-            print("\t" + self.vocab.symbols[i] + ": " + str(self.histogram[i]))
+        for i in range(1, len(self.histogram)):  # Starts from 1 assuming 0 is the root or OOV which we might want to skip
+            print("\t" + self.vocab.get_item_by_id(i) + ": " + str(self.histogram[i]))
+
 

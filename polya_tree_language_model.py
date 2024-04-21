@@ -71,7 +71,7 @@ class PolyaTreeLanguageModel:
         pass
 
     def add_symbol_and_update(self, context: Optional[Context], symbol: int):
-        if symbol <= self.vocab.root_symbol:
+        if symbol <= self.vocab.get_root_id():
             return
         assert symbol < self.vocab.size(), f"Invalid symbol: {symbol}"
         path = self.get_path(symbol)

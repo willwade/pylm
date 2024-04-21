@@ -2,22 +2,24 @@
 
 import sys
 from vocabulary import Vocabulary
-from vocabulary import VocabWords
 from ppm_language_model import PPMLanguageModel, Context
 import math
+
+import matplotlib.pyplot as plt
+
 
 def train_model(train_file, max_order, debug=False):
     with open(train_file, 'r', encoding='utf-8') as file:
         contents = file.read()
 
     vocab = Vocabulary()
-    for char in set(contents):  # Adding only unique characters to vocabulary
-        vocab.add_symbol(char)
+    for char in set(contents):  
+        vocab.add_item(char)
 
     lm = PPMLanguageModel(vocab, max_order, debug=debug)
     context = Context(lm.root, 0)
     for char in contents:
-        symbol_id = vocab.get_symbol_id_or_oov(char)
+        symbol_id = vocab.get_id_or_oov(char)  # Ensuring OOV handling
         lm.add_symbol_and_update(context, symbol_id)
 
     return lm, vocab
@@ -32,7 +34,7 @@ def test_model(lm, vocab, test_file):
         if line.strip():
             context = Context(lm.root, 0)
             for char in line.strip():
-                symbol = vocab.get_symbol_id_or_oov(char)
+                symbol = vocab.get_id_or_oov(char)
                 probs = lm.get_probs(context)
                 prob = probs[symbol] if symbol < len(probs) else 0  # Handling OOV and checking bounds
                 if prob > 0:
@@ -46,35 +48,55 @@ def test_model(lm, vocab, test_file):
 
 def predict_next_from_fixed_input(lm, vocab, input_text, num_predictions=3):
     context = lm.create_context()
-    for char in input_text:
-        char_id = vocab.get_symbol_id_or_oov(char)
-        lm.add_symbol_to_context(context, char_id)
-    
-    top_prediction_ids = lm.predict_next_ids(context, num_predictions)
-    
-    # Convert indices to characters, handling OOV if necessary
-    predicted_chars = [vocab.get_symbol_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in top_prediction_ids]
-    return predicted_chars
-    
+    try:
+        for char in input_text:
+            char_id = vocab.get_id_or_oov(char)  
+            lm.add_symbol_to_context(context, char_id)
+            if lm.debug:
+                print(f"Adding '{char}' to context, ID: {char_id}, Current Head ID: {id(context.head)}, Order: {context.order}")
+        
+        if lm.debug:
+            print("Attempting to predict next symbols...")
+        top_prediction_ids = lm.predict_next_ids(context, num_predictions)
+        # Sample data: probabilities and their corresponding indices
+        indices = [index for index, prob in top_prediction_ids]
+        probabilities = [prob for index, prob in top_prediction_ids]
+        
+        plt.figure(figsize=(10, 5))
+        plt.bar(indices, probabilities, color='blue')
+        plt.xlabel('Token Index')
+        plt.ylabel('Probability')
+        plt.title('Probability Distribution of Predictions')
+        plt.show()
+        
+        if lm.debug:
+            print("Prediction IDs retrieved, processing output...")
+        
+        predicted_chars = [vocab.get_item_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in top_prediction_ids]
+        
+        if lm.debug:
+            print(f"Final Context State before Prediction: Head at {id(context.head)}, Order: {context.order}")
+        return predicted_chars
+    except Exception as e:
+        print(f"Error during context update: {str(e)}")
 
 
 def tokenize(text):
-    # Simple tokenization by whitespace. You might want to use a more robust tokenizer.
     return text.split()
 
-def train_model_word_level(train_file, max_order,debug=False):
+def train_model_word_level(train_file, max_order, debug=False):
     with open(train_file, 'r', encoding='utf-8') as file:
         contents = file.read()
     
     words = tokenize(contents)
-    vocab = VocabWords()
+    vocab = Vocabulary()  
     for word in set(words):
-        vocab.add_symbol(word)
+        vocab.add_item(word)
 
     lm = PPMLanguageModel(vocab, max_order, debug=debug)
     context = Context(lm.root, 0)
     for word in words:
-        word_id = vocab.get_symbol_id_or_oov(word)
+        word_id = vocab.get_id_or_oov(word)  
         lm.add_symbol_and_update(context, word_id)
 
     return lm, vocab
@@ -82,7 +104,7 @@ def train_model_word_level(train_file, max_order,debug=False):
 def predict_next_from_fixed_input_word_level(lm, vocab, input_text, num_predictions=3):
     context = lm.create_context()
     for word in tokenize(input_text):
-        word_id = vocab.get_symbol_id_or_oov(word)
+        word_id = vocab.get_id_or_oov(word) 
         lm.add_symbol_to_context(context, word_id)
 
     top_predictions = lm.predict_next_ids(context, num_predictions)
@@ -92,10 +114,10 @@ def predict_next_from_fixed_input_word_level(lm, vocab, input_text, num_predicti
         if index == vocab.oov_index:
             predicted_words.append('<OOV>')
         else:
-            predicted_word = vocab.get_symbol_by_id(index)
+            predicted_word = vocab.get_item_by_id(index)  
             predicted_words.append(predicted_word)
     return predicted_words
-    
+
 
 '''
     So this next chunk is really code to give you a very pretty graph of the trie
@@ -145,7 +167,7 @@ if __name__ == '__main__':
         sys.exit(1)
 
     max_order, train_file, test_file = int(sys.argv[1]), sys.argv[2], sys.argv[3]
-    lm, vocab = train_model(train_file, max_order, debug=False)
+    lm, vocab = train_model(train_file, max_order, debug=True)
     test_model(lm, vocab, test_file)
     fixed_input = "he"
     predicted_chars= predict_next_from_fixed_input(lm, vocab, fixed_input, 5)

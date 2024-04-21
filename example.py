@@ -7,8 +7,8 @@ def test_ppm_language_model(vocab):
     max_order = 5
     lm = PPMLanguageModel(vocab, max_order)
     context = lm.create_context()
-    a_id = vocab.get_symbol_id_or_oov("a")
-    b_id = vocab.get_symbol_id_or_oov("b")
+    a_id = vocab.get_id_or_oov("a")
+    b_id = vocab.get_id_or_oov("b")
 
     # Update model with sequence "ab"
     lm.add_symbol_and_update(context, a_id)
@@ -38,7 +38,7 @@ def test_ppm_language_model(vocab):
     # Predict next character
     predicted_ids = lm.predict_next_ids(context,3)
     print(f"Predicted next ids: {predicted_ids}")
-    predicted_chars = [vocab.get_symbol_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in predicted_ids]
+    predicted_chars = [vocab.get_item_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in predicted_ids]
     print(f"Predicted next chars': {predicted_chars}")
     
 def test_histogram_language_model(vocab):
@@ -46,7 +46,7 @@ def test_histogram_language_model(vocab):
     context = lm.create_context()
     training_data = "ababababab"
     for symbol in training_data:
-        lm.add_symbol_and_update(context, vocab.get_symbol_id_or_oov(symbol))
+        lm.add_symbol_and_update(context, vocab.get_id_or_oov(symbol))
     print("Histogram after training:")
     lm.print_to_console()
 
@@ -54,15 +54,15 @@ def test_polya_tree_language_model(vocab):
     lm = PolyaTreeLanguageModel(vocab)
     context = lm.create_context()
     for symbol in "aacccdd":
-        lm.add_symbol_and_update(context, vocab.get_symbol_id_or_oov(symbol))
+        lm.add_symbol_and_update(context, vocab.get_id_or_oov(symbol))
     print("Polya tree model probabilities:")
     probs = lm.get_probs(context)
     print(probs)
 
 def main():
     vocab = Vocabulary()
-    vocab.add_symbol("a")
-    vocab.add_symbol("b")
+    vocab.add_item("a")
+    vocab.add_item("b")
 
     print("Testing PPM Language Model:")
     test_ppm_language_model(vocab)
@@ -70,8 +70,8 @@ def main():
     print("Testing Histogram Language Model:")
     test_histogram_language_model(vocab)
 
-    vocab.add_symbol("c")
-    vocab.add_symbol("d")
+    vocab.add_item("c")
+    vocab.add_item("d")
     print("Testing Polya Tree Language Model:")
     test_polya_tree_language_model(vocab)
 
