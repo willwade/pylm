@@ -64,6 +64,12 @@ Python invoke
 > python example.py
 ```
 
+**Notes**
+
+- Something is wrong with my PPM library. Its continually predicting the same ids no matter the context. I don't get it. 
+
+
+
 ## Test Utility (and Demo of Character or Word prediction)
 
 A simple test driver [language_model_driver.py](language_model_driver.py) can be used to check that the model behaves using Python 3+. The
