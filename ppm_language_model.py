@@ -332,7 +332,18 @@ class PPMLanguageModel:
             return (self.kn_alpha + num_extensions * self.kn_beta) / (count + self.kn_alpha)
         return 1.0
 
+    def get_probs_with_symbols(lm, context):
+        # Retrieve the raw probabilities from the model
+        raw_probs = lm.get_probs(context)
     
+        # Get the symbols corresponding to the indices
+        symbols = [lm.vocab.get_item_by_id(i) for i in range(len(raw_probs))]
+    
+        # Pair each symbol with its probability
+        prob_symbol_pairs = list(zip(symbols, raw_probs))
+    
+        return prob_symbol_pairs
+        
     def predict_next_ids(self, context, num_predictions=1):
         if self.debug:
             print(f"Debug: Current context before prediction: {context}, Order: {context.order}")

@@ -6,6 +6,7 @@ from ppm_language_model import PPMLanguageModel, Context
 import math
 
 import matplotlib.pyplot as plt
+import re
 
 
 def train_model(train_file, max_order, debug=False):
@@ -46,43 +47,26 @@ def test_model(lm, vocab, test_file):
     perplexity = 10 ** (-total_log_prob / num_symbols) if num_symbols > 0 else float('inf')
     print(f"Results: numSymbols = {num_symbols}, ppl = {perplexity}, entropy = {entropy} bits/char")
 
-def predict_next_from_fixed_input(lm, vocab, input_text, num_predictions=3):
-    context = lm.create_context()
-    try:
-        for char in input_text:
-            char_id = vocab.get_id_or_oov(char)  
-            lm.add_symbol_to_context(context, char_id)
-            if lm.debug:
-                print(f"Adding '{char}' to context, ID: {char_id}, Current Head ID: {id(context.head)}, Order: {context.order}")
-        
-        if lm.debug:
-            print("Attempting to predict next symbols...")
-        top_prediction_ids = lm.predict_next_ids(context, num_predictions)
-        # Sample data: probabilities and their corresponding indices
-        indices = [index for index, prob in top_prediction_ids]
-        probabilities = [prob for index, prob in top_prediction_ids]
-        
-        plt.figure(figsize=(10, 5))
-        plt.bar(indices, probabilities, color='blue')
-        plt.xlabel('Token Index')
-        plt.ylabel('Probability')
-        plt.title('Probability Distribution of Predictions')
-        plt.show()
-        
-        if lm.debug:
-            print("Prediction IDs retrieved, processing output...")
-        
-        predicted_chars = [vocab.get_item_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in top_prediction_ids]
-        
-        if lm.debug:
-            print(f"Final Context State before Prediction: Head at {id(context.head)}, Order: {context.order}")
-        return predicted_chars
-    except Exception as e:
-        print(f"Error during context update: {str(e)}")
 
+import re
+from string import punctuation
 
 def tokenize(text):
-    return text.split()
+    # Replace characters that are repeated three or more times with a single character
+    text = re.sub(r'[{}]+'.format(re.escape(punctuation.replace('?!\'', ''))), ' ', text)
+    
+    # Remove specific characters
+    text = re.sub(r'[?!\'"]+', '', text)
+    
+    # Condense all whitespace to a single space
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Trim leading and trailing whitespaces
+    text = text.strip()
+
+    # Split the text into tokens
+    tokens = text.split()
+    return tokens
 
 def train_model_word_level(train_file, max_order, debug=False):
     with open(train_file, 'r', encoding='utf-8') as file:
@@ -101,22 +85,67 @@ def train_model_word_level(train_file, max_order, debug=False):
 
     return lm, vocab
 
-def predict_next_from_fixed_input_word_level(lm, vocab, input_text, num_predictions=3):
+# ... other parts of your code ...
+
+def predict_next_from_input(lm, vocab, input_text, num_predictions=3):
     context = lm.create_context()
-    for word in tokenize(input_text):
-        word_id = vocab.get_id_or_oov(word) 
-        lm.add_symbol_to_context(context, word_id)
+    prob_symbol_pairs = []
 
-    top_predictions = lm.predict_next_ids(context, num_predictions)
+    try:
+        for char in input_text:
+            char_id = vocab.get_id_or_oov(char)
+            lm.add_symbol_to_context(context, char_id)
+            if lm.debug:
+                print(f"Adding '{char}' to context, ID: {char_id}, Current Head ID: {id(context.head)}, Order: {context.order}")
 
-    predicted_words = []
-    for index, _ in top_predictions:
-        if index == vocab.oov_index:
-            predicted_words.append('<OOV>')
-        else:
-            predicted_word = vocab.get_item_by_id(index)  
-            predicted_words.append(predicted_word)
-    return predicted_words
+        if lm.debug:
+            print("Attempting to predict next symbols...")
+            
+        probs = lm.get_probs(context)
+        prob_symbol_pairs = lm.get_probs_with_symbols(context)
+        
+        # Sort by probability and get the top predictions
+        top_prediction_ids = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)[:num_predictions]
+        
+        predicted_chars = [vocab.get_item_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in top_prediction_ids]
+
+        if lm.debug:
+            print("Prediction IDs retrieved, processing output...")
+            print(f"Final Context State before Prediction: Head at {id(context.head)}, Order: {context.order}")
+
+        return predicted_chars, prob_symbol_pairs
+    except Exception as e:
+        print(f"Error during context update: {str(e)}")
+        return [], prob_symbol_pairs  # Return an empty list and prob_symbol_pairs if an error occurs
+
+import numpy as np
+
+# Helper function to plot the probabilities with corresponding symbols
+def plot_probabilities(prob_symbol_pairs):
+    # Unzip the pairs into two lists
+    prob_symbol_pairs_sorted = sorted(prob_symbol_pairs, key=lambda x: x[1], reverse=True)
+    
+    # Extract just the probabilities after sorting
+    probabilities = [prob for symbol, prob in prob_symbol_pairs_sorted]
+    
+    # Rank the probabilities (highest probability gets rank 1)
+    ranks = np.arange(1, len(probabilities) + 1)
+    
+    # Convert ranks and probabilities to a logarithmic scale
+    log_ranks = np.log(ranks)
+    log_probabilities = np.log(probabilities)
+    
+    # Plotting on a log-log scale
+    plt.figure(figsize=(10, 6))
+    plt.plot(log_ranks, log_probabilities, marker='o', linestyle='', markersize=5, label='Log-Log Distribution')
+    
+    plt.xlabel('Log of Rank')
+    plt.ylabel('Log of Probability')
+    plt.title('Log-Log Probability Distribution of Symbols')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 
 
 '''
@@ -158,32 +187,31 @@ def draw_graph(graph):
     pos = nx.drawing.nx_agraph.graphviz_layout(graph, prog='dot')
     nx.draw(graph, pos, labels=labels, with_labels=True, node_size=2000, node_color='lightblue')
     plt.show()
-
-import time
+    
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
-        print("Usage: python script.py max_order train_file test_file")
+        print("Usage: python script.py max_order train_file test_file debug")
         sys.exit(1)
 
+
     max_order, train_file, test_file = int(sys.argv[1]), sys.argv[2], sys.argv[3]
-    lm, vocab = train_model(train_file, max_order, debug=True)
+    lm, vocab = train_model(train_file, max_order, debug=False)
     test_model(lm, vocab, test_file)
-    fixed_input = "he"
-    predicted_chars= predict_next_from_fixed_input(lm, vocab, fixed_input, 5)
-    print(f"Top 5 character predictions for '{fixed_input}': {predicted_chars}")
-    #lm.print_to_console()
-    #g = build_graph_iterative(lm.root, vocab)
-    #draw_graph(g)
-    
-    # Now words
-    start_time = time.perf_counter()
-    lm, vocab = train_model_word_level(train_file, max_order*4, debug=False)  # Use the word-level training function
-    test_model(lm, vocab, test_file)
-    fixed_input = "What "
-    predicted_words = predict_next_from_fixed_input_word_level(lm, vocab, fixed_input, 5)  # Use the word-level prediction function
-    print(f"Top 5 character predictions for '{fixed_input}': {predicted_words}")
-    
 
+    input_text = "Wh"
+    num_predictions = 5
+    # For character-level predictions
+    predicted_chars, prob_symbol_pairs = predict_next_from_input(lm, vocab, input_text, num_predictions)
+    print(f"Top 5 character predictions for 'he': {predicted_chars}")
+    plot_probabilities(prob_symbol_pairs)
 
+    # For word-level predictions
+    lm_word, vocab_word = train_model_word_level(train_file, max_order, debug=False)  # Use the word-level training function
+    input_text = "Wh"
+    num_predictions = 5
+    # For character-level predictions
+    predicted_words, prob_symbol_pairs = predict_next_from_input(lm_word, vocab_word, input_text, num_predictions)
+    print(f"Top 5 word predictions for 'What': {predicted_words}")
+    plot_probabilities(prob_symbol_pairs)
 
