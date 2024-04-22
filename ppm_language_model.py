@@ -50,6 +50,10 @@ class Context:
         Useful for debugging or for operations that need to know the current state of the context.
         """
         return self.head
+    
+    def reset_to_root(self):
+        self.head = self.root  
+        self.order = 0
         
 class Node:
     """ 
@@ -184,6 +188,15 @@ class PPMLanguageModel:
             current = current.backoff
         return self.root  # Ensure this is really the desired fallback
 
+    def context_to_node(self, context):
+        node = self.root  # Starting at the root of the trie
+        for char in context:
+            if char in node.children:
+                node = node.children[char]
+            else:
+                return None  # Context does not exist in the trie
+        return node
+    
     def create_context(self):
         """
         Creates new context which is initially empty.
@@ -200,79 +213,75 @@ class PPMLanguageModel:
         return Context(head=context.head, order=context.order)
 
     def add_symbol_to_context(self, context, symbol):
+        if not (0 < symbol < self.vocab.size()):
+            if self.debug:
+                print(f"Invalid symbol: {symbol}")
+            return  # Only add valid symbols
+        
         if self.debug:
-            print(f"Before adding symbol: Current head ID = {id(context.head)}, Order = {context.order}")
-        if not self.vocab.is_valid_id(symbol):
-            print("Debug: Invalid symbol ID", symbol)  # Check if symbol IDs are valid
-            return
-            
-        current_node = context.head
-        while current_node and context.order < self.max_order:
-            child_node = current_node.find_child_with_symbol(symbol)
-            if child_node:
-                context.head = child_node
-                context.order += 1
-                if self.debug:
-                    print(f"After adding symbol {symbol}: New head ID = {id(context.head)}, New Order = {context.order}")
-                return  # Exit as soon as the child is found and context is updated
-            
-            # If no child node is found, backoff
-            if current_node.backoff:
-                current_node = current_node.backoff
-            else:
-                break  # No backoff available, break the loop
-    
-        # Handle the case where backoff leads to no valid node or max order is reached without finding a child
-        if context.order >= self.max_order or not current_node:
-            context.head = self.root  # Reset to root if backoff chain ends or max order reached
+            print(f"Starting add_symbol_to_context with symbol ID {symbol} ({self.vocab.get_item_by_id(symbol)})")
+        
+        while context.head is not None:
+            if context.order < self.max_order:
+                child_node = context.head.find_child_with_symbol(symbol)
+                if child_node is not None:
+                    context.head = child_node
+                    context.order += 1
+                    if self.debug:
+                        print(f"Extended context to node with symbol '{self.vocab.get_item_by_id(symbol)}', new order {context.order}")
+                    return  # Successfully extended the context
+                
+            # Back off to shorter context
+            if self.debug:
+                print(f"No child node found for symbol '{self.vocab.get_item_by_id(symbol)}', backoff to shorter context")
+            context.order -= 1
+            context.head = context.head.backoff
+
+        # If no valid head is found, reset context
+        if context.head is None:
+            context.head = self.root
             context.order = 0
             if self.debug:
-                print(f"Resetting to root: New head ID = {id(context.head)}, New Order = {context.order}")
+                print("Context reset to root due to null head after backoff")
 
-        
+
     def add_symbol_and_update(self, context, symbol):
-        """
-        Adds symbol to the supplied context and updates the model.
-        @param {?Context} context Context object.
-        @param {number} symbol Integer symbol.
-        """
-        
-        if not (0 <= symbol < self.vocab.size()):
-            if self.debug:
-                print("Invalid symbol")
-            return  # Handling invalid symbols
-        
         if self.debug:
-            print(f"Updating context and trie with symbol {symbol}")
-        
-        current_node = context.head
-        old_order = context.order  # Track the previous order for debugging
-        
-        while current_node is not None and context.order >= self.max_order:
-            current_node = current_node.backoff  # Back off to shorter context
-            context.order -= 1
+            print(f"Attempting to add/update symbol: {symbol} ({self.vocab.get_item_by_id(symbol)})")
+
+        if not self.vocab.is_valid_id(symbol):
             if self.debug:
-                print(f"Reducing context order due to max_order, now {context.order}")
-        
-        if current_node is None:
-            if self.debug:
-                print("Backoff led to null node, resetting to root")
-            current_node = self.root
-            context.order = 0  # Reset order when backoff goes to null
-    
-        # Attempt to add or retrieve the node for this symbol
-        symbol_node = self.add_symbol_to_node(current_node, symbol)
-        if not symbol_node:
-            if self.debug:
-                print("Failed to add or find a node for the symbol")
+                print("Invalid symbol ID.")
             return
-        
-        # Update context to point to this node
-        context.head = symbol_node
-        context.order += 1
+
+        current_node = context.head
+        found = False
+
+        # Traverse the trie to find or create the needed node
+        while current_node is not None and context.order < self.max_order:
+            child_node = current_node.find_child_with_symbol(symbol)
+            if not child_node:
+                if self.debug:
+                    print(f"No child found for symbol {symbol}, creating new node.")
+                # If no child exists with the symbol, create one
+                child_node = Node(symbol)  # Assuming Node is the class name and symbol is stored directly
+                current_node.children[symbol] = child_node
+                if self.debug:
+                    print(f"Child node created for symbol {symbol}.")
+
+            # Move to the found or newly created child node
+            context.head = child_node
+            context.order += 1
+            found = True
+            break
+
+        if not found:
+            # Reset to root if no suitable child is found and we've reached max order
+            context.head = self.root
+            context.order = 0
+
         if self.debug:
-            symbol_char = self.vocab.get_item_by_id(symbol)
-            print(f"Context updated: Old Order {old_order}, New Order {context.order}, Node with symbol '{symbol_char}'")
+            print(f"Context updated: head ID = {id(context.head)}, order = {context.order}")
 
     
     def debug_node_details(self,node):
@@ -286,7 +295,7 @@ class PPMLanguageModel:
         probs = [0.0] * num_symbols
         exclusion_mask = [False] * num_symbols if self.use_exclusion else None
         total_mass = 1.0
-        node = context.head
+        node = context.get_current_head()
     
         while node:
             count = node.total_children_counts(exclusion_mask)

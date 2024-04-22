@@ -87,6 +87,21 @@ def train_model_word_level(train_file, max_order, debug=False):
 
 # ... other parts of your code ...
 
+def get_context_node(lm, context):
+    current_node = lm.root
+    print(f"Starting search for context '{context}'")
+    for char in context:
+        char_id = lm.vocab.get_id_or_oov(char)  # Ensure to work with character IDs
+        if char_id in current_node.children:
+            current_node = current_node.children[char_id]
+        else:
+            print(f"Context '{context}' not found at character '{char}'")
+            return None
+    return Context(current_node, len(context))  # Return a Context object instead of Node
+
+
+
+
 def predict_next_from_input(lm, vocab, input_text, num_predictions=3):
     context = lm.create_context()
     prob_symbol_pairs = []
@@ -106,7 +121,9 @@ def predict_next_from_input(lm, vocab, input_text, num_predictions=3):
         
         # Sort by probability and get the top predictions
         top_prediction_ids = sorted(enumerate(probs), key=lambda x: x[1], reverse=True)[:num_predictions]
-        
+        if lm.debug:
+            print(f"Probabilities: {probs}")
+            print(f"Top prediction IDs: {top_prediction_ids}")
         predicted_chars = [vocab.get_item_by_id(index) if index != vocab.oov_index else '<OOV>' for index, _ in top_prediction_ids]
 
         if lm.debug:
@@ -187,7 +204,69 @@ def draw_graph(graph):
     pos = nx.drawing.nx_agraph.graphviz_layout(graph, prog='dot')
     nx.draw(graph, pos, labels=labels, with_labels=True, node_size=2000, node_color='lightblue')
     plt.show()
+
+# Assuming 'lm' is your language model and 'vocab' is your vocabulary object
+
+# 1. Print context frequencies
+def print_context_frequencies(lm, context):
+    """Print frequencies of following characters for a given context."""
+    current_node = lm.root
+    for char in context:
+        if not current_node:
+            print(f"Context '{context}' not found at character '{char}'")
+            return
+        char_id = vocab.get_id_or_oov(char)
+        current_node = current_node.find_child_with_symbol(char_id)
+    if current_node:
+        print(f"Frequencies after context '{context}':")
+        for symbol_id, child in current_node.children.items():
+            char = vocab.get_item_by_id(symbol_id)
+            print(f"'{char}': {child.count}")
+    else:
+        print(f"Context node for '{context}' not found.")
+
+def print_contexts(node, vocab, current_context='', depth=0, max_depth=5):
+    if depth > max_depth:  # Limit the depth to prevent too much output
+        return
+    for symbol_id, child_node in node.children.items():
+        symbol = vocab.get_item_by_id(symbol_id)  # Get symbol from vocab
+        new_context = current_context + symbol
+        print(f"{' ' * depth}{new_context}")
+        print_contexts(child_node, vocab, new_context, depth + 1, max_depth)
+
+
+# 3. Vocabulary and mapping checks
+def vocab_and_mapping_checks(vocab, training_text):
+    # Verify vocabulary size
+    expected_vocab_size = len(set(training_text))
+    actual_vocab_size = vocab.size()
+    print(f"Expected vocab size: {expected_vocab_size}, Actual: {actual_vocab_size}")
     
+    # Check unique character IDs
+    unique_ids = set(vocab.get_id_or_oov(char) for char in training_text)
+    if len(unique_ids) != actual_vocab_size:
+        print(f"Mismatch in unique character IDs and vocabulary size.")
+
+    # Check for character representation in the vocabulary
+    missing_chars = {char for char in training_text if vocab.get_id_or_oov(char) == vocab.oov_index}
+    for char in missing_chars:
+        print(f"Character '{char}' not found in vocabulary.")
+
+def check_prob_distribution_changes(lm, vocab, context_examples):
+    for context_string in context_examples:
+        context = get_context_node(lm, context_string)  # This should return a Context now
+        if context:
+            probs = lm.get_probs(context)
+            print(f"Probabilities for context '{context_string}': {probs}")
+        else:
+            print(f"Context '{context_string}' not found.")
+
+def check_vocab(vocab):
+    print(f"Vocabulary size: {vocab.size()}")
+    print("Sample items in vocabulary:")
+    for i in range(min(vocab.size(), 20)):  # Print first 20 items for brevity
+        print(f"ID {i}: {vocab.get_item_by_id(i)}")
+
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
@@ -196,19 +275,38 @@ if __name__ == '__main__':
 
 
     max_order, train_file, test_file = int(sys.argv[1]), sys.argv[2], sys.argv[3]
-    lm, vocab = train_model(train_file, max_order, debug=False)
+    lm, vocab = train_model(train_file, max_order, debug=True)
     test_model(lm, vocab, test_file)
+
+    # Usage examples
+    check_vocab(vocab)
+    lm.print_trie()
+    context_examples = ['the', 'and', 'a']
+    print_context_frequencies(lm, 'the')  # Example context
+    print_contexts(lm.root, vocab)
+
+
+    # Debugging and testing the function
+    context_node = get_context_node(lm, 'the')
+    if context_node:
+        print(f"Context node for 'the' found.")
+    else:
+        print(f"Context node for 'the' not found.")
+
+    check_prob_distribution_changes(lm, vocab, context_examples)
+    vocab_and_mapping_checks(vocab, 'Sample training text to check.')
 
     input_text = "Wh"
     num_predictions = 5
-    # For character-level predictions
+    # For character-level prediction
+    lm.debug = True
     predicted_chars, prob_symbol_pairs = predict_next_from_input(lm, vocab, input_text, num_predictions)
     print(f"Top 5 character predictions for 'he': {predicted_chars}")
     plot_probabilities(prob_symbol_pairs)
 
     # For word-level predictions
     lm_word, vocab_word = train_model_word_level(train_file, max_order, debug=False)  # Use the word-level training function
-    input_text = "Wh"
+    input_text = "wh"
     num_predictions = 5
     # For character-level predictions
     predicted_words, prob_symbol_pairs = predict_next_from_input(lm_word, vocab_word, input_text, num_predictions)
