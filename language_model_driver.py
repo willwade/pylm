@@ -1,15 +1,19 @@
 # python language_model_driver.py 30 path_to_train.txt path_to_test.txt
 
-import numpy as np
-import networkx as nx
 from string import punctuation
 import sys
 from vocabulary import Vocabulary
 from ppm_language_model import PPMLanguageModel, Context
 import math
 
-import matplotlib.pyplot as plt
-import re
+# IF You are using any of the plotting or other functions you need these
+plotting = False
+
+if plotting:
+    import numpy as np
+    import networkx as nx
+    import matplotlib.pyplot as plt
+    import re
 
 
 def train_model(train_file, max_order, debug=False):
@@ -296,10 +300,13 @@ if __name__ == '__main__':
     if len(sys.argv) != 4:
         print("Usage: python script.py max_order train_file test_file debug")
         sys.exit(1)
-
     max_order, train_file, test_file = int(
         sys.argv[1]), sys.argv[2], sys.argv[3]
     lm, vocab = train_model(train_file, max_order, debug=True)
+    
+    
+    plotting=True
+
     test_model(lm, vocab, test_file)
     print('Space character ID:', vocab.get_id_or_oov(' '))
     print('Is space in vocabulary:', ' ' in vocab.items_to_index)
