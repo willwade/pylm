@@ -34,6 +34,7 @@ class Context:
     """
     Handle encapsulating the search context.
     """
+
     def __init__(self, head, order, debug=False):
         """
         Constructor.
@@ -50,11 +51,12 @@ class Context:
         Useful for debugging or for operations that need to know the current state of the context.
         """
         return self.head
-    
+
     def reset_to_root(self):
-        self.head = self.root  
+        self.head = self.root
         self.order = 0
-        
+
+
 class Node:
     """ 
     Node in a search tree, which is implemented as a suffix trie that represents
@@ -68,6 +70,7 @@ class Node:
          Implementation Technique for Varied-Length N-gram Language Models",
          MSc. Thesis, Saarland University.
     """
+
     def __init__(self, symbol=None):
         """
         Node in the backoff structure, also known as "vine" structure (see [1]
@@ -94,20 +97,20 @@ class Node:
     def find_child_with_symbol(self, symbol):
         """
         Finds a child node of the current node with a specified symbol.
-        
+
         Args:
             symbol (int): Integer symbol to search for.
-            
+
         Returns:
             Node: Node with the specified symbol, or None if not found.
-        """    
+        """
         return self.children.get(symbol, None)
 
     def total_children_counts(self, exclusion_mask=None):
         """
         Total number of observations for all the children of this node.
         This counts all the events observed in this context.
-    
+
         Note: This API is used at inference time. A possible alternative that will
         speed up the inference is to store the number of children in each node as
         originally proposed by Moffat for PPMB in
@@ -115,17 +118,17 @@ class Node:
           IEEE Transactions on Communications, vol. 38, no. 11, pp. 1917--1921.
         This however will increase the memory use of the algorithm which is already
         quite substantial.
-    
+
         Args:
             exclusion_mask (List[bool], optional): Boolean exclusion mask for all the symbols.
                 Can be None, in which case no exclusion happens.
-    
+
         Returns:
             int: Total number of observations under this node.
         """
         return sum(node.count for sym, node in self.children.items()
                    if exclusion_mask is None or (sym < len(exclusion_mask) and not exclusion_mask[sym]))
-                   
+
     def num_distinct_symbols(self):
         """
         Returns the number of distinct symbols (children) for this node.
@@ -143,8 +146,8 @@ class PPMLanguageModel:
             max_order (int): Maximum length of the context.
             kn_alpha (int):Kneser-Ney "-like" smoothing parameters.
             kn_beta(int): Kneser-Ney "-like" smoothing parameters.
-        """    
-        assert vocabulary.size() > 1, "Vocabulary must contain at least two symbols"        
+        """
+        assert vocabulary.size() > 1, "Vocabulary must contain at least two symbols"
         if max_order < 1:
             raise ValueError("max_order must be a positive integer")
         self.vocab = vocabulary
@@ -157,7 +160,6 @@ class PPMLanguageModel:
         self.num_nodes = 1
         self.use_exclusion = False
         self.debug = debug
-
 
     def add_symbol_to_node(self, node, symbol):
         """
@@ -172,14 +174,16 @@ class PPMLanguageModel:
             node.children[symbol] = new_node
             self.num_nodes += 1  # Increment the number of nodes
             if self.debug:
-                print(f"Debug: New node created for symbol {symbol} with backoff pointing to {new_node.backoff}, Total nodes: {self.num_nodes}")
+                print(
+                    f"Debug: New node created for symbol {symbol} with backoff pointing to {new_node.backoff}, Total nodes: {self.num_nodes}")
         else:
             node.children[symbol].count += 1
             if self.debug:
-                print(f"Debug: Revisiting existing node for symbol {symbol} with new count {node.children[symbol].count}")
-        
+                print(
+                    f"Debug: Revisiting existing node for symbol {symbol} with new count {node.children[symbol].count}")
+
         return node.children[symbol]
-        
+
     def find_appropriate_backoff(self, node, symbol):
         current = node.backoff
         while current is not None:
@@ -196,14 +200,14 @@ class PPMLanguageModel:
             else:
                 return None  # Context does not exist in the trie
         return node
-    
+
     def create_context(self):
         """
         Creates new context which is initially empty.
         @return {?Context} Context object.
-        """    
+        """
         return Context(self.root, 0)
-    
+
     def clone_context(context):
         """
         Clones existing context.
@@ -217,10 +221,11 @@ class PPMLanguageModel:
             if self.debug:
                 print(f"Invalid symbol: {symbol}")
             return  # Only add valid symbols
-        
+
         if self.debug:
-            print(f"Starting add_symbol_to_context with symbol ID {symbol} ({self.vocab.get_item_by_id(symbol)})")
-        
+            print(
+                f"Starting add_symbol_to_context with symbol ID {symbol} ({self.vocab.get_item_by_id(symbol)})")
+
         while context.head is not None:
             if context.order < self.max_order:
                 child_node = context.head.find_child_with_symbol(symbol)
@@ -228,12 +233,14 @@ class PPMLanguageModel:
                     context.head = child_node
                     context.order += 1
                     if self.debug:
-                        print(f"Extended context to node with symbol '{self.vocab.get_item_by_id(symbol)}', new order {context.order}")
+                        print(
+                            f"Extended context to node with symbol '{self.vocab.get_item_by_id(symbol)}', new order {context.order}")
                     return  # Successfully extended the context
-                
+
             # Back off to shorter context
             if self.debug:
-                print(f"No child node found for symbol '{self.vocab.get_item_by_id(symbol)}', backoff to shorter context")
+                print(
+                    f"No child node found for symbol '{self.vocab.get_item_by_id(symbol)}', backoff to shorter context")
             context.order -= 1
             context.head = context.head.backoff
 
@@ -244,10 +251,10 @@ class PPMLanguageModel:
             if self.debug:
                 print("Context reset to root due to null head after backoff")
 
-
     def add_symbol_and_update(self, context, symbol):
         if self.debug:
-            print(f"Attempting to add/update symbol: {symbol} ({self.vocab.get_item_by_id(symbol)})")
+            print(
+                f"Attempting to add/update symbol: {symbol} ({self.vocab.get_item_by_id(symbol)})")
 
         if not self.vocab.is_valid_id(symbol):
             if self.debug:
@@ -258,22 +265,16 @@ class PPMLanguageModel:
         found = False
 
         # Traverse the trie to find or create the needed node
-        while current_node is not None and context.order < self.max_order:
-            child_node = current_node.find_child_with_symbol(symbol)
-            if not child_node:
-                if self.debug:
-                    print(f"No child found for symbol {symbol}, creating new node.")
-                # If no child exists with the symbol, create one
-                child_node = Node(symbol)  # Assuming Node is the class name and symbol is stored directly
-                current_node.children[symbol] = child_node
-                if self.debug:
-                    print(f"Child node created for symbol {symbol}.")
+        while context.head is not None and context.order < self.max_order:
+            child_node = self.add_symbol_to_node(context.head, symbol)
 
-            # Move to the found or newly created child node
+            # Update the context head to point to the child node
             context.head = child_node
             context.order += 1
-            found = True
-            break
+            if self.debug:
+                print(
+                    f"Context updated: head ID = {id(context.head)}, order = {context.order}")
+            return
 
         if not found:
             # Reset to root if no suitable child is found and we've reached max order
@@ -281,108 +282,119 @@ class PPMLanguageModel:
             context.order = 0
 
         if self.debug:
-            print(f"Context updated: head ID = {id(context.head)}, order = {context.order}")
+            print(
+                f"Context updated: head ID = {id(context.head)}, order = {context.order}")
 
-    
-    def debug_node_details(self,node):
+    def debug_node_details(self, node):
         # Simplified to use actual Node properties
         if node:
             return f"Node at {id(node)}, Count={node.count}, Children={len(node.children)}"
         return "None"
-    
+
     def get_probs(self, context):
         num_symbols = self.vocab.size()
         probs = [0.0] * num_symbols
         exclusion_mask = [False] * num_symbols if self.use_exclusion else None
         total_mass = 1.0
         node = context.get_current_head()
-    
+
         while node:
             count = node.total_children_counts(exclusion_mask)
             if count > 0:
                 for symbol, child_node in node.children.items():
                     if exclusion_mask is None or not exclusion_mask[symbol]:
-                        p = max(child_node.count - self.kn_beta, 0) / (count + self.kn_alpha)
+                        p = max(child_node.count - self.kn_beta, 0) / \
+                            (count + self.kn_alpha)
                         adjusted_p = p * total_mass
                         probs[symbol] += adjusted_p
                         if exclusion_mask:
                             exclusion_mask[symbol] = True
-    
+
             # Calculate remaining probability mass for backing off
-            backoff_mass = self.kn_alpha / (count + self.kn_alpha) if count > 0 else 1.0
+            backoff_mass = self.kn_alpha / \
+                (count + self.kn_alpha) if count > 0 else 1.0
             total_mass *= backoff_mass
             node = node.backoff
-    
+
         # Adjust probabilities to sum to 1
         self.normalize_probs(probs, exclusion_mask)
         return probs
-    
+
     def normalize_probs(self, probs, exclusion_mask):
         num_symbols = self.vocab.size()
         remaining_mass = 1.0 - sum(probs)
-    
+
         if remaining_mass > 0:
-            non_excluded_count = sum(1 for i in range(num_symbols) if exclusion_mask is None or not exclusion_mask[i])
+            non_excluded_count = sum(1 for i in range(
+                num_symbols) if exclusion_mask is None or not exclusion_mask[i])
             for i in range(num_symbols):
                 if exclusion_mask is None or not exclusion_mask[i]:
                     probs[i] += remaining_mass / non_excluded_count
-    
+
         # Ensure probabilities sum exactly to 1.0, adjusting for small floating-point discrepancies
         sum_probs = sum(probs)
         if not math.isclose(sum_probs, 1.0, abs_tol=self.epsilon):
             adjustment = (1.0 - sum_probs) / num_symbols
             probs = [p + adjustment for p in probs]
-    
-        assert math.isclose(sum(probs), 1.0, abs_tol=self.epsilon), "Probabilities do not sum to 1 after normalization"
+
+        assert math.isclose(sum(
+            probs), 1.0, abs_tol=self.epsilon), "Probabilities do not sum to 1 after normalization"
 
     def calculate_gamma(self, node, count, exclusion_mask):
         if count > 0:
-            num_extensions = sum(1 for sym in range(self.vocab.size()) if exclusion_mask is None or not exclusion_mask[sym])
+            num_extensions = sum(1 for sym in range(
+                self.vocab.size()) if exclusion_mask is None or not exclusion_mask[sym])
             return (self.kn_alpha + num_extensions * self.kn_beta) / (count + self.kn_alpha)
         return 1.0
 
     def get_probs_with_symbols(lm, context):
         # Retrieve the raw probabilities from the model
         raw_probs = lm.get_probs(context)
-    
+
         # Get the symbols corresponding to the indices
         symbols = [lm.vocab.get_item_by_id(i) for i in range(len(raw_probs))]
-    
+
         # Pair each symbol with its probability
         prob_symbol_pairs = list(zip(symbols, raw_probs))
-    
+
         return prob_symbol_pairs
-        
+
     def predict_next_ids(self, context, num_predictions=1):
         if self.debug:
-            print(f"Debug: Current context before prediction: {context}, Order: {context.order}")
-    
+            print(
+                f"Debug: Current context before prediction: {context}, Order: {context.order}")
+
         if not context.head or context.order < 1:
             print("Debug: Invalid context or order.")  # Additional debug
             return []
-    
+
         probs = self.get_probs(context)
         if not probs or all(p == 0 for p in probs):
             if self.debug:
-                print("Debug: No valid probabilities computed.", probs)  # Additional debug
+                print("Debug: No valid probabilities computed.",
+                      probs)  # Additional debug
             return []
         if self.debug:
-            print(f"Debug: Raw probabilities: {probs}")  # Print raw probabilities
-        top_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)[:num_predictions]
-        top_predictions = [(index, probs[index]) for index in top_indices if probs[index] > 0]
-        if self.debug:    
-            print("Debug: Predictions computed:", top_predictions)  # Additional debug
+            # Print raw probabilities
+            print(f"Debug: Raw probabilities: {probs}")
+        top_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)[
+            :num_predictions]
+        top_predictions = [(index, probs[index])
+                           for index in top_indices if probs[index] > 0]
+        if self.debug:
+            print("Debug: Predictions computed:",
+                  top_predictions)  # Additional debug
         return top_predictions
 
     def print_trie(self, node=None, indent=""):
         if node is None:
             node = self.root
-    
+
         stack = [(node, None, indent)]
-    
+
         while stack:
             current_node, symbol, current_indent = stack.pop()
-    
+
             if current_node == self.root:
                 print(f"{current_indent}<Root> (count: {current_node.count})")
             else:
@@ -394,18 +406,21 @@ class PPMLanguageModel:
                         symbol_char = '<undefined>'
                 else:
                     symbol_char = '<undefined>'
-                
+
                 backoff_char = "<None>"
                 if current_node.backoff:
-                    backoff_symbol = current_node.backoff.symbol if hasattr(current_node.backoff, 'symbol') else None
-                    backoff_char = self.vocab.get_item_by_id(backoff_symbol) if backoff_symbol is not None else "<None>"
+                    backoff_symbol = current_node.backoff.symbol if hasattr(
+                        current_node.backoff, 'symbol') else None
+                    backoff_char = self.vocab.get_item_by_id(
+                        backoff_symbol) if backoff_symbol is not None else "<None>"
                     if backoff_char == ' ':
                         backoff_char = '<space>'
                     elif backoff_char is None:
                         backoff_char = '<undefined>'
-    
-                print(f"{current_indent}{symbol_char} (count: {current_node.count}, backoff: {backoff_char})")
-    
+
+                print(
+                    f"{current_indent}{symbol_char} (count: {current_node.count}, backoff: {backoff_char})")
+
             for sym, child in reversed(list(current_node.children.items())):
                 stack.append((child, sym, current_indent + "  "))
 
@@ -416,7 +431,8 @@ class PPMLanguageModel:
             path.append((node.symbol, node.count))
             node = node.backoff
         path.reverse()
-        print("Current context path:", ' -> '.join([f"{sym}({cnt})" for sym, cnt in path]))
+        print("Current context path:",
+              ' -> '.join([f"{sym}({cnt})" for sym, cnt in path]))
 
     def print_to_console(self):
         self.print_trie(self.root)
