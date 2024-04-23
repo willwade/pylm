@@ -8,12 +8,9 @@ import math
 import re
 
 # IF You are using any of the plotting or other functions you need these
-plotting = False
-
-if plotting:
-    import numpy as np
-    import networkx as nx
-    import matplotlib.pyplot as plt
+#import numpy as np
+#import networkx as nx
+#import matplotlib.pyplot as plt
 
 
 def train_model(train_file, max_order, debug=False):
@@ -147,6 +144,7 @@ def predict_next_from_input(lm, vocab, input_text, num_predictions=3):
                 f"Final Context State before Prediction: Head at {id(context.head)}, Order: {context.order}")
 
         return predicted_chars, prob_symbol_pairs
+        
     except Exception as e:
         print(f"Error during context update: {str(e)}")
         # Return an empty list and prob_symbol_pairs if an error occurs
@@ -249,6 +247,7 @@ def print_context_frequencies(lm, context):
 
 
 def print_contexts(node, vocab, current_context='', depth=0, max_depth=5):
+    print(f"Printing Contexts '{current_context}':")
     if depth > max_depth:  # Limit the depth to prevent too much output
         return
     for symbol_id, child_node in node.children.items():
@@ -305,7 +304,9 @@ if __name__ == '__main__':
     lm, vocab = train_model(train_file, max_order, debug=True)
     
     
-    plotting=True
+    import numpy as np
+    import networkx as nx
+    import matplotlib.pyplot as plt
 
     test_model(lm, vocab, test_file)
     print('Space character ID:', vocab.get_id_or_oov(' '))
@@ -333,7 +334,7 @@ if __name__ == '__main__':
     predicted_chars, prob_symbol_pairs = predict_next_from_input(
         lm, vocab, input_text, num_predictions)
     print(f"Top 5 character predictions for 'he': {predicted_chars}")
-    # plot_probabilities(prob_symbol_pairs)
+    plot_probabilities(prob_symbol_pairs)
 
     # draw_graph(build_graph_iterative(lm.root, vocab, 20))
     # For word-level predictions
