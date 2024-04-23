@@ -5,6 +5,7 @@ import sys
 from vocabulary import Vocabulary
 from ppm_language_model import PPMLanguageModel, Context
 import math
+import re
 
 # IF You are using any of the plotting or other functions you need these
 plotting = False
@@ -13,7 +14,6 @@ if plotting:
     import numpy as np
     import networkx as nx
     import matplotlib.pyplot as plt
-    import re
 
 
 def train_model(train_file, max_order, debug=False):
