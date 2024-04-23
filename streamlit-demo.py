@@ -12,36 +12,34 @@ def load_default_models(train_file, max_order=5, debug=False):
 
 st.title('Interactive PPM Language Model Prediction')
 
-st.write("Note all in memory. No fancy LLM involved. No requirements.txt. All training on the fly")
+st.write("Note all in memory. No fancy LLM involved. No requirements.txt. All training on the fly.Ignore the widget warning. No idea how to get rid of that!")
 
-# Text input for user to type in their text
-user_input = st.text_input("Type here:", key="user_input", on_change=st.rerun)
-if 'n' not in st.session_state:
-    st.session_state.n = 0  # Initialize once
+# Define the handler for updating the user input
+def update_input(addition):
+    st.session_state.user_input += addition
+
+# Initialize or retrieve the current user input from session state
+if 'user_input' not in st.session_state:
+    st.session_state.user_input = ""
+
+# Display the text input field, bound directly to session state
+user_input = st.text_input("Type here:", value=st.session_state.user_input, key="user_input")
 
 if user_input:
-    # Predictions
-    #st.write(f"Debug: { st.session_state.n }")
-    #st.write(f"Debug: {user_input}")
-    st.session_state.n += 1
+    # Fetch predictions based on the current input
     predictions_char,_ = predict_next_from_input(lm_char, vocab_char, user_input, 5)
     predictions_word,_ = predict_next_from_input(lm_word, vocab_word, user_input, 5)
 
-    # Debug output to see if predictions are updated
-    #st.write(f"Debug: {predictions_char}")
-    #st.write(f"Debug: {predictions_word}")
-
+    # Display character predictions in a horizontal layout
     st.write("Character Predictions:")
-    col1, col2, col3, col4, col5 = st.columns(5)  # Adjust the number of columns based on your needs
-    cols = [col1, col2, col3, col4, col5]
+    cols = st.columns(len(predictions_char))  # Dynamically adjust based on the number of predictions
     for idx, char in enumerate(predictions_char):
-        with cols[idx]:  # Use the column to display the button
-            st.button(char, key=f"char_{idx}", on_click=lambda ch=char: st.session_state.update({'user_input': user_input + ch}))
+        with cols[idx]:
+            st.button(char, key=f"char_{idx}", on_click=update_input, args=(char,))
 
-    # Display word predictions horizontally
+    # Display word predictions in a horizontal layout
     st.write("Word Predictions:")
-    col1, col2, col3, col4, col5 = st.columns(5)  # Adjust the number of columns based on your needs
-    cols = [col1, col2, col3, col4, col5]
+    cols = st.columns(len(predictions_word))
     for idx, word in enumerate(predictions_word):
-        with cols[idx]:  # Use the column to display the button
-            st.button(word, key=f"word_{idx}", on_click=lambda w=word: st.session_state.update({'user_input': user_input + w + " "}))
+        with cols[idx]:
+            st.button(word, key=f"word_{idx}", on_click=update_input, args=(word + " ",))
